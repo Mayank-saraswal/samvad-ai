@@ -19,10 +19,11 @@ const badgeVariants = cva(
         ghost:
           "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
         link: "text-primary underline-offset-4 hover:underline",
-        sage: "bg-sage-soft text-sage border-sage/20",
-        sky: "bg-sky-soft text-sky border-sky/20",
-        coral: "bg-coral-soft text-coral border-coral/20",
-        gold: "bg-gold/15 text-gold border-gold/30",
+        sage: "bg-emerald-500/15 text-emerald-900 border-emerald-500/30 font-semibold dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/40",
+        sky: "bg-sky-500/15 text-sky-950 border-sky-500/30 font-semibold dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800/40",
+        coral: "bg-rose-500/15 text-rose-950 border-rose-500/30 font-semibold dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800/40",
+        gold: "bg-amber-500/15 text-amber-950 border-amber-500/30 font-semibold dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/40",
+        brand: "bg-brand-soft/80 text-brand-ink border-brand/50 font-semibold",
       },
     },
     defaultVariants: {

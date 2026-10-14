@@ -8,5 +8,6 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    exclude: ["node_modules", "ui inspired temp", "**/.{idea,git,cache,output,temp}/**"],
   },
 });

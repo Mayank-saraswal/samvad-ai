@@ -11,9 +11,9 @@ const alertVariants = cva(
         destructive:
           "bg-destructive/10 border-destructive/25 text-destructive *:data-[slot=alert-description]:text-destructive/90 *:[svg]:text-current",
         warning:
-          "bg-gold/10 border-gold/30 text-foreground *:data-[slot=alert-description]:text-foreground/80 *:[svg]:text-gold",
+          "bg-amber-500/10 border-amber-500/30 text-amber-950 dark:text-amber-200 *:data-[slot=alert-description]:text-amber-900 dark:*:data-[slot=alert-description]:text-amber-300 *:[svg]:text-amber-700 dark:*:[svg]:text-amber-400",
         success:
-          "bg-sage-soft border-sage/30 text-sage-dark *:data-[slot=alert-description]:text-foreground/80 *:[svg]:text-sage",
+          "bg-emerald-500/10 border-emerald-500/30 text-emerald-950 dark:text-emerald-200 *:data-[slot=alert-description]:text-emerald-900 dark:*:data-[slot=alert-description]:text-emerald-300 *:[svg]:text-emerald-700 dark:*:[svg]:text-emerald-400",
       },
     },
     defaultVariants: {

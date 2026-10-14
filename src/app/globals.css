@@ -98,6 +98,7 @@
 }
 
 :root {
+  color-scheme: light;
   --background: oklch(0.982 0.012 105);
   --foreground: oklch(0.19 0.018 120);
   --card: oklch(0.945 0.022 105);
@@ -130,13 +131,13 @@
   --paper: var(--page);
   --paper-deep: var(--canvas);
   --ink-soft: oklch(0.35 0.023 115);
-  --coral: var(--brand);
-  --coral-soft: var(--brand-soft);
+  --coral: oklch(0.65 0.20 28);
+  --coral-soft: oklch(0.95 0.04 28);
   --sage: oklch(0.62 0.11 145);
   --sage-soft: oklch(0.93 0.04 145);
   --sky: oklch(0.57 0.23 350);
   --sky-soft: oklch(0.93 0.07 350);
-  --gold: oklch(0.78 0.12 86);
+  --gold: oklch(0.78 0.14 78);
   --radius: 0.625rem;
 }
 
@@ -185,12 +186,28 @@
 @layer base {
   * {
     @apply border-border outline-ring/45;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
   }
-  html {
+  html,
+  body {
     scroll-behavior: smooth;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+    background-color: var(--background);
+    color: var(--foreground);
+    min-height: 100%;
+  }
+  *::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    background: transparent !important;
   }
   body {
-    @apply bg-background text-foreground font-sans;
+    @apply bg-background text-foreground font-sans min-h-screen;
+    background-color: var(--background);
+    color: var(--foreground);
   }
   ::selection {
     @apply bg-coral-soft text-foreground;
@@ -199,31 +216,79 @@
   a {
     -webkit-tap-highlight-color: transparent;
   }
-  [data-slot="button"] {
+
+  /* Tactile Button 3D Edge and Shadow System matching Loreline */
+  [data-slot="button"],
+  .btn-loreline {
     --button-edge: color-mix(in oklab, var(--foreground) 22%, transparent);
     --button-haze: color-mix(in oklab, var(--foreground) 10%, transparent);
     transform: translateY(-1px);
     box-shadow:
       0 3px 0 var(--button-edge),
       0 8px 18px var(--button-haze);
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
   }
-  [data-slot="button"][data-variant="default"] {
+  [data-slot="button"][data-variant="default"],
+  .btn-loreline-default {
     --button-edge: color-mix(in oklab, var(--primary) 72%, var(--foreground));
     --button-haze: color-mix(in oklab, var(--primary) 24%, transparent);
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+    box-shadow:
+      0 3px 0 var(--button-edge),
+      0 8px 18px var(--button-haze);
   }
-  [data-slot="button"]:hover:not(:disabled) {
+  [data-slot="button"][data-variant="outline"],
+  .btn-loreline-outline {
+    --button-edge: color-mix(in oklab, var(--border) 90%, var(--foreground));
+    --button-haze: color-mix(in oklab, var(--foreground) 8%, transparent);
+    background-color: var(--background);
+    color: var(--foreground);
+    border: 1px solid var(--border);
+    box-shadow:
+      0 3px 0 var(--button-edge),
+      0 8px 18px var(--button-haze);
+  }
+  [data-slot="button"][data-variant="secondary"] {
+    --button-edge: color-mix(in oklab, var(--foreground) 22%, transparent);
+    --button-haze: color-mix(in oklab, var(--foreground) 10%, transparent);
+    background-color: var(--control);
+    color: var(--foreground);
+    box-shadow:
+      0 3px 0 var(--button-edge),
+      0 8px 18px var(--button-haze);
+  }
+  [data-slot="button"][data-variant="ghost"],
+  [data-slot="button"][data-variant="link"] {
+    transform: none !important;
+    box-shadow: none !important;
+  }
+  [data-slot="button"]:hover:not(:disabled),
+  .btn-loreline:hover {
     transform: translateY(-2px);
     box-shadow:
       0 4px 0 var(--button-edge),
       0 11px 22px var(--button-haze);
   }
-  [data-slot="button"]:active:not(:disabled) {
+  [data-slot="button"][data-variant="ghost"]:hover:not(:disabled),
+  [data-slot="button"][data-variant="link"]:hover:not(:disabled) {
+    transform: none !important;
+    box-shadow: none !important;
+  }
+  [data-slot="button"]:active:not(:disabled),
+  .btn-loreline:active {
     transform: translateY(1px);
     box-shadow:
       0 1px 0 var(--button-edge),
       0 3px 8px var(--button-haze);
   }
+  [data-slot="button"][data-variant="ghost"]:active:not(:disabled),
+  [data-slot="button"][data-variant="link"]:active:not(:disabled) {
+    transform: none !important;
+    box-shadow: none !important;
+  }
 }
+
 
 @layer utilities {
   .text-balance {
@@ -261,7 +326,228 @@
         color-mix(in oklab, var(--reader-ink) 3%, transparent) 0.45px,
         transparent 0.55px
       );
-    background-size: 100% 1.85rem, 18px 18px;
+    background-size:
+      100% 100%,
+      7px 7px;
+    box-shadow:
+      0 2px 0 color-mix(in oklab, var(--reader-ink) 10%, transparent),
+      0 5px 0 color-mix(in oklab, var(--reader-paper) 88%, var(--reader-ink)),
+      0 24px 65px oklch(0.08 0.01 255 / 0.24);
+  }
+
+  @keyframes pdf-spectrum-travel {
+    to {
+      background-position: 200% 200%;
+    }
+  }
+
+  @keyframes pdf-spectrum-breathe {
+    0%,
+    100% {
+      opacity: calc(
+        var(--reader-aura-opacity-low, 0.5) *
+          var(--reader-aura-layer-strength, 1)
+      );
+    }
+    50% {
+      opacity: calc(
+        var(--reader-aura-opacity-high, 0.82) *
+          var(--reader-aura-layer-strength, 1)
+      );
+    }
+  }
+
+  @keyframes pdf-inspection-glow-pulse {
+    0% {
+      opacity: 0.34;
+      transform: scale(0.68) rotate(-12deg);
+    }
+    55% {
+      opacity: 0.92;
+      transform: scale(1.08) rotate(8deg);
+    }
+    100% {
+      opacity: 0.18;
+      transform: scale(1.42) rotate(22deg);
+    }
+  }
+
+  @keyframes pdf-focus-rainbow-sweep {
+    0% {
+      background-position: 0% 50%;
+    }
+    100% {
+      background-position: 200% 50%;
+    }
+  }
+
+  .pdf-reader-focus {
+    background-image: linear-gradient(
+      105deg,
+      color-mix(in oklab, var(--coral) 52%, transparent),
+      color-mix(in oklab, var(--gold) 56%, transparent),
+      color-mix(in oklab, var(--sage) 52%, transparent),
+      color-mix(in oklab, var(--sky) 50%, transparent),
+      color-mix(in oklab, var(--coral) 52%, transparent)
+    );
+    background-position: 0% 50%;
+    background-size: 200% 100%;
+    box-shadow:
+      0 0 0.85rem color-mix(in oklab, var(--coral) 44%, transparent),
+      0 0 1.65rem color-mix(in oklab, var(--sky) 34%, transparent);
+    will-change: background-position;
+    animation: pdf-focus-rainbow-sweep 4s linear infinite;
+  }
+
+  .pdf-reading-state-aura,
+  .pdf-reading-aura {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    isolation: isolate;
+  }
+
+  .pdf-reading-state-aura {
+    z-index: 0;
+    overflow: visible;
+  }
+
+  .pdf-reading-aura {
+    z-index: 15;
+    overflow: hidden;
+  }
+
+  .pdf-reading-state-aura__edge {
+    position: absolute;
+    background-image: linear-gradient(
+      var(--reader-aura-direction, 90deg),
+      var(--reader-aura-one, var(--sage)),
+      var(--reader-aura-two, var(--gold)),
+      var(--reader-aura-three, var(--coral)),
+      var(--reader-aura-four, var(--sky)),
+      var(--reader-aura-one, var(--sage))
+    );
+    background-position: 0% 50%;
+    background-size: 200% 100%;
+    filter: blur(var(--reader-aura-blur, 16px)) saturate(1.18);
+    will-change: background-position, opacity;
+    animation:
+      pdf-spectrum-travel var(--reader-aura-orbit-duration, 7s) linear infinite,
+      pdf-spectrum-breathe var(--reader-aura-pulse-duration, 2.8s) ease-in-out
+        infinite;
+  }
+
+  .pdf-reading-state-aura__edge[data-aura-layer="ambient"] {
+    --reader-aura-layer-strength: 0.48;
+    --reader-aura-thickness: 4.25rem;
+    --reader-aura-offset: -2.25rem;
+    --reader-aura-blur: 24px;
+    animation-delay: -1.6s, -0.7s;
+  }
+
+  .pdf-reading-state-aura__edge[data-aura-layer="core"] {
+    --reader-aura-layer-strength: 1;
+    --reader-aura-thickness: 2.5rem;
+    --reader-aura-offset: -1.25rem;
+    --reader-aura-blur: 10px;
+    animation-delay: 0s, -0.35s;
+  }
+
+  .pdf-reading-state-aura__edge[data-aura-edge="top"],
+  .pdf-reading-state-aura__edge[data-aura-edge="bottom"] {
+    --reader-aura-direction: 90deg;
+    left: var(--reader-aura-offset, -1.25rem);
+    width: calc(
+      100% - var(--reader-aura-offset, -1.25rem) - var(--reader-aura-offset, -1.25rem)
+    );
+    height: var(--reader-aura-thickness, 2.5rem);
+  }
+
+  .pdf-reading-state-aura__edge[data-aura-edge="top"] {
+    top: var(--reader-aura-offset, -1.25rem);
+  }
+
+  .pdf-reading-state-aura__edge[data-aura-edge="bottom"] {
+    bottom: var(--reader-aura-offset, -1.25rem);
+    animation-direction: reverse, normal;
+  }
+
+  .pdf-reading-state-aura__edge[data-aura-edge="left"],
+  .pdf-reading-state-aura__edge[data-aura-edge="right"] {
+    --reader-aura-direction: 180deg;
+    top: var(--reader-aura-offset, -1.25rem);
+    width: var(--reader-aura-thickness, 2.5rem);
+    height: calc(
+      100% - var(--reader-aura-offset, -1.25rem) - var(--reader-aura-offset, -1.25rem)
+    );
+    background-size: 100% 200%;
+  }
+
+  .pdf-reading-state-aura__edge[data-aura-edge="left"] {
+    left: var(--reader-aura-offset, -1.25rem);
+    animation-direction: reverse, normal;
+  }
+
+  .pdf-reading-state-aura__edge[data-aura-edge="right"] {
+    right: var(--reader-aura-offset, -1.25rem);
+  }
+
+  .pdf-reading-aura__inspection-target {
+    position: absolute;
+    display: grid;
+    width: 1px;
+    height: 1px;
+    translate: -50% -50%;
+    place-items: center;
+  }
+
+  .pdf-reading-aura__inspection-glow {
+    position: absolute;
+    width: 10rem;
+    height: 10rem;
+    border-radius: 999px;
+    background: conic-gradient(
+      from 35deg,
+      color-mix(in oklab, var(--coral) 72%, transparent),
+      color-mix(in oklab, var(--gold) 68%, transparent),
+      color-mix(in oklab, var(--sage) 64%, transparent),
+      color-mix(in oklab, var(--sky) 68%, transparent),
+      color-mix(in oklab, var(--coral) 72%, transparent)
+    );
+    filter: blur(10px);
+    mask-image: radial-gradient(circle, black 12%, transparent 72%);
+    animation: pdf-inspection-glow-pulse 1.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  }
+
+  .pdf-reading-aura__inspection-dot {
+    position: absolute;
+    width: 0.72rem;
+    height: 0.72rem;
+    border-radius: 999px;
+    background: var(--coral);
+    box-shadow:
+      0 0 16px color-mix(in oklab, var(--coral) 88%, transparent),
+      0 0 36px color-mix(in oklab, var(--gold) 58%, transparent);
+  }
+
+  .pdf-reading-aura__inspection-label {
+    position: absolute;
+    top: 1rem;
+    left: 50%;
+    translate: -50% 0;
+    width: max-content;
+    max-width: 14rem;
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--foreground) 90%, transparent);
+    box-shadow: var(--shadow-soft);
+    color: var(--background);
+    font-size: 0.65rem;
+    font-weight: 650;
+    letter-spacing: 0.02em;
+    line-height: 1;
+    padding: 0.4rem 0.65rem;
+    white-space: nowrap;
+    border: 1px solid color-mix(in oklab, var(--background) 20%, transparent);
   }
   .scrollbar-none {
     scrollbar-width: none;
@@ -269,4 +555,132 @@
   .scrollbar-none::-webkit-scrollbar {
     display: none;
   }
-}
+
+  @keyframes pulse-blob {
+    0%, 100% {
+      transform: scale(1) translateY(0);
+      opacity: 0.9;
+    }
+    50% {
+      transform: scale(1.05) translateY(-10px);
+      opacity: 1;
+    }
+  }
+
+  @keyframes float-subtle {
+    0%, 100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-6px);
+    }
+  }
+
+  @keyframes wave-equalizer {
+    0%, 100% {
+      transform: scaleY(0.3);
+    }
+    50% {
+      transform: scaleY(1);
+    }
+  }
+
+  .animate-blob-slow {
+    animation: pulse-blob 9s ease-in-out infinite;
+  }
+
+  .animate-float-slow {
+    animation: float-subtle 6s ease-in-out infinite;
+  }
+
+  .animate-wave-1 {
+    animation: wave-equalizer 1.5s ease-in-out infinite 0.1s;
+  }
+  .animate-wave-2 {
+    animation: wave-equalizer 1.5s ease-in-out infinite 0.3s;
+  }
+  .animate-wave-3 {
+    animation: wave-equalizer 1.5s ease-in-out infinite 0.5s;
+  }
+  .animate-wave-4 {
+    animation: wave-equalizer 1.5s ease-in-out infinite 0.25s;
+  }
+  .animate-wave-5 {
+    animation: wave-equalizer 1.5s ease-in-out infinite 0.4s;
+  }
+
+  @keyframes cursor-ripple {
+    0% {
+      transform: scale(0.8);
+      opacity: 0.95;
+    }
+    100% {
+      transform: scale(2.6);
+      opacity: 0;
+    }
+  }
+
+  @keyframes cursor-beacon {
+    0%, 100% {
+      transform: scale(1);
+      box-shadow: 0 0 0 0 rgba(212, 233, 74, 0.7);
+    }
+    50% {
+      transform: scale(1.08);
+      box-shadow: 0 0 18px 5px rgba(212, 233, 74, 0.55);
+    }
+  }
+
+  @keyframes chat-message-in {
+    0% {
+      opacity: 0;
+      transform: translateY(14px) scale(0.98);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  @keyframes typewriter-blink {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0;
+    }
+  }
+
+  @keyframes cursor-float {
+    0%, 100% {
+      transform: translate(0, 0);
+    }
+    50% {
+      transform: translate(-4px, -3px);
+    }
+  }
+
+  .animate-cursor-ripple {
+    animation: cursor-ripple 1.8s cubic-bezier(0, 0.2, 0.8, 1) infinite;
+  }
+  .animate-cursor-beacon {
+    animation: cursor-beacon 2.4s ease-in-out infinite;
+  }
+  .animate-cursor-float {
+    animation: cursor-float 2s ease-in-out infinite;
+  }
+  .animate-chat-in {
+    animation: chat-message-in 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+  .animate-typewriter-blink {
+    animation: typewriter-blink 0.85s ease-in-out infinite;
+  }
+
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}

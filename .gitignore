@@ -48,3 +48,6 @@ next-env.d.ts
 # trigger.dev
 .trigger
 
+# temp folders
+ui inspired temp/
+

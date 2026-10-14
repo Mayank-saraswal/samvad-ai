@@ -172,13 +172,13 @@ export function DirectUploadDropzone({
 
         <div className="size-12 rounded-full bg-muted/80 flex items-center justify-center mb-3 shadow-xs">
           {fileKind === "audio" ? (
-            <Music className="size-6 text-sky" />
+            <Music className="size-6 text-sky-700 dark:text-sky-400" />
           ) : (
-            <FileText className="size-6 text-brand" />
+            <FileText className="size-6 text-foreground" />
           )}
         </div>
 
-        <h3 className="font-story text-lg font-semibold text-foreground">
+        <h3 className="font-display text-lg font-semibold tracking-tight text-foreground">
           {selectedFile ? selectedFile.name : "Select or drag case evidence"}
         </h3>
 

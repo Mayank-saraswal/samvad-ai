@@ -253,20 +253,16 @@ export function ReviewEditor({
       {/* Top Header & Navigation Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border/70">
         <div>
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1.5">
             <Link
               href="/dossiers"
               className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 font-medium"
             >
               <ArrowLeft className="size-3" /> Back to Case Dossiers
             </Link>
-            <span className="text-muted-foreground/60">•</span>
-            <span className="text-xs text-muted-foreground font-mono">Dossier: {doc.id}</span>
-            <span className="text-muted-foreground/60">•</span>
-            <span className="text-xs text-muted-foreground font-mono">Dept: {doc.tenantId}</span>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="font-story text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">
+            <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">
               {doc.title}
             </h1>
             <Badge variant={domainProfile.badgeVariant} className="text-xs">
@@ -307,7 +303,7 @@ export function ReviewEditor({
           {/* Precedents Search Dialog (Qdrant) */}
           <Dialog open={isPrecedentDialogOpen} onOpenChange={setIsPrecedentDialogOpen}>
             <DialogTrigger render={<Button variant="outline" size="sm" onClick={handleSearchPrecedents} />}>
-              <Sparkles className="size-3.5 text-brand" /> Search Precedents
+              <Sparkles className="size-3.5 text-brand-ink" /> Search Precedents
             </DialogTrigger>
             <DialogContent className="sm:max-w-xl">
               <DialogHeader>

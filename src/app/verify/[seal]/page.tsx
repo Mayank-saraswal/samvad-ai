@@ -19,42 +19,48 @@ export default async function PublicVerifyPage({ params }: VerifyPageProps): Pro
 
   if (!doc) {
     return (
-      <div className="flex-1 max-w-2xl mx-auto p-6 sm:p-12 flex flex-col items-center justify-center text-center space-y-6">
-        <div className="w-16 h-16 rounded-full bg-destructive/15 text-destructive flex items-center justify-center border border-destructive/20">
+      <div className="flex-1 flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] p-8 text-center space-y-6 bg-background text-foreground relative overflow-hidden">
+        <div className="pointer-events-none absolute inset-x-0 top-0 -z-0 h-[32rem] bg-[radial-gradient(circle_at_50%_16%,rgba(212,233,74,0.35)_0%,rgba(212,233,74,0.12)_28%,transparent_60%)] animate-blob-slow" />
+        <div className="w-16 h-16 rounded-2xl bg-destructive/15 text-destructive flex items-center justify-center border border-destructive/20 relative z-10">
           <Lock className="w-8 h-8" />
         </div>
-        <div className="space-y-2">
-          <h1 className="text-3xl font-story font-semibold tracking-tight text-foreground">
+        <div className="space-y-2 max-w-md relative z-10">
+          <h1 className="text-3xl font-display font-semibold tracking-tight text-foreground">
             Unverified Document Signature
           </h1>
           <p className="text-sm text-muted-foreground leading-relaxed">
             The cryptographic seal identifier <code className="font-mono bg-muted/60 px-2 py-0.5 rounded text-xs">{seal}</code> could not be matched against any certified public disclosures in this registry.
           </p>
         </div>
-        <Button variant="outline" render={<Link href="/" />}>
-          ← Return to Public Verification Portal
-        </Button>
+        <div className="relative z-10">
+          <Button variant="outline" render={<Link href="/verify" />}>
+            ← Return to Verification Gateway
+          </Button>
+        </div>
       </div>
     );
   }
 
   if (doc.status !== "approved") {
     return (
-      <div className="flex-1 max-w-2xl mx-auto p-6 sm:p-12 flex flex-col items-center justify-center text-center space-y-6">
-        <div className="w-16 h-16 rounded-full bg-gold/15 text-primary flex items-center justify-center border border-primary/20">
+      <div className="flex-1 flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] p-8 text-center space-y-6 bg-background text-foreground relative overflow-hidden">
+        <div className="pointer-events-none absolute inset-x-0 top-0 -z-0 h-[32rem] bg-[radial-gradient(circle_at_50%_16%,rgba(212,233,74,0.35)_0%,rgba(212,233,74,0.12)_28%,transparent_60%)] animate-blob-slow" />
+        <div className="w-16 h-16 rounded-2xl bg-amber-500/15 text-amber-700 dark:text-amber-300 flex items-center justify-center border border-amber-500/30 relative z-10">
           <Lock className="w-8 h-8" />
         </div>
-        <div className="space-y-2">
-          <h1 className="text-3xl font-story font-semibold tracking-tight text-foreground">
+        <div className="space-y-2 max-w-md relative z-10">
+          <h1 className="text-3xl font-display font-semibold tracking-tight text-foreground">
             Pending Public Certification
           </h1>
           <p className="text-sm text-muted-foreground leading-relaxed">
             This incident record is currently in draft review and has not yet been stamped with an official, immutable cryptographic seal.
           </p>
         </div>
-        <Button variant="outline" render={<Link href="/" />}>
-          ← Return to Public Verification Portal
-        </Button>
+        <div className="relative z-10">
+          <Button variant="outline" render={<Link href="/verify" />}>
+            ← Return to Verification Gateway
+          </Button>
+        </div>
       </div>
     );
   }
@@ -66,20 +72,22 @@ export default async function PublicVerifyPage({ params }: VerifyPageProps): Pro
   const sealHash = `sha256:0x${doc.id.replace(/[^a-f0-9]/gi, "").padEnd(16, "a")}${doc.createdAt.getTime().toString(16)}`;
 
   return (
-    <div className="flex-1 max-w-4xl mx-auto p-6 sm:p-12 space-y-8">
-      {/* Top Breadcrumb & Status */}
-      <div className="flex items-center justify-between pb-4 border-b border-border/60">
-        <Link
-          href="/"
-          className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Verification Gateway</span>
-        </Link>
-        <span className="text-xs font-mono text-muted-foreground">
-          Registry Tenant: <span className="text-foreground">{doc.tenantId}</span>
-        </span>
-      </div>
+    <div className="flex-1 flex flex-col min-h-screen bg-background text-foreground relative overflow-hidden">
+      <div className="pointer-events-none absolute inset-x-0 top-0 -z-0 h-[38rem] bg-[radial-gradient(circle_at_50%_12%,rgba(212,233,74,0.36)_0%,rgba(212,233,74,0.13)_28%,transparent_60%)] animate-blob-slow" />
+      <div className="relative z-10 flex-1 max-w-4xl mx-auto p-6 sm:p-12 space-y-8 w-full">
+        {/* Top Breadcrumb & Status */}
+        <div className="flex items-center justify-between pb-4 border-b border-border/60">
+          <Link
+            href="/verify"
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5 font-medium"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Verification Gateway</span>
+          </Link>
+          <Badge variant="sage" className="text-[11px] font-mono py-0.5 px-2.5">
+            Verified Department Attestation
+          </Badge>
+        </div>
 
       {/* Sovereign Verification Badge Card */}
       <Card className="bg-card ring-1 ring-foreground/10 overflow-hidden shadow-sm">
@@ -94,7 +102,7 @@ export default async function PublicVerifyPage({ params }: VerifyPageProps): Pro
                 {profile.entityName}
               </Badge>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-story font-semibold text-foreground tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-display font-semibold text-foreground tracking-tight">
               {doc.title}
             </h1>
           </div>
@@ -149,7 +157,7 @@ export default async function PublicVerifyPage({ params }: VerifyPageProps): Pro
 
           {/* Grounded Fact Matrix (Grounded Disclosures) */}
           <div className="space-y-3 pt-2">
-            <h2 className="text-lg font-story font-semibold tracking-tight text-foreground">
+            <h2 className="text-lg font-display font-semibold tracking-tight text-foreground">
               Grounded Fact Matrix (Audited Citations)
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -188,6 +196,7 @@ export default async function PublicVerifyPage({ params }: VerifyPageProps): Pro
           </div>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

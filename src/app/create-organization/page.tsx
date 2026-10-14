@@ -16,10 +16,10 @@ export default function CreateOrganizationPage(): React.JSX.Element {
 
       <div className="space-y-2 pb-4 border-b border-border/60">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-gold/15 flex items-center justify-center text-primary border border-primary/20">
+          <div className="w-8 h-8 rounded-lg bg-amber-500/15 flex items-center justify-center text-amber-700 dark:text-amber-300 border border-amber-500/30">
             <Building2 className="w-4 h-4" />
           </div>
-          <h1 className="text-2xl font-story font-semibold tracking-tight text-foreground">
+          <h1 className="text-2xl font-display font-semibold tracking-tight text-foreground">
             Create Department Organization
           </h1>
         </div>
