@@ -21,6 +21,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { PibPressNote } from "@/components/press-note/pib-press-note";
+import type { PibPressNoteInput } from "@/lib/press-note/pib";
 
 export interface PressNoteData {
   headline1?: string;
@@ -35,7 +37,10 @@ export interface PressNoteData {
   revisionsCount?: number;
   spans?: readonly { sourceId: string; locator: string; text: string }[];
   documentId?: string;
+  pib?: PibPressNoteInput;
 }
+
+export type PdfInspectorMode = "evidence" | "pressnote" | "pib";
 
 interface PdfInspectorProps {
   documentTitle: string;
@@ -43,28 +48,28 @@ interface PdfInspectorProps {
   activeLocator?: string | null;
   className?: string;
   pressNoteData?: PressNoteData;
-  initialMode?: "evidence" | "pressnote";
-  onModeChange?: (mode: "evidence" | "pressnote") => void;
+  initialMode?: PdfInspectorMode;
+  onModeChange?: (mode: PdfInspectorMode) => void;
 }
 
 const SAMPLE_CASE_PARAGRAPHS = [
   {
     locator: "LOC-P1",
-    label: "Incident Origin & First Information",
-    text: "On 14-Oct-2026, formal complaints were received regarding unauthorized financial diversions through fraudulent mirror-payment endpoints. Complainants reported sudden debits originating from cloned session cookies.",
-    statute: "IPC §420 / IT Act §66D",
+    label: "Incident Origin & Initial Reporting",
+    text: "On 14-Oct-2026, formal incident notifications were received regarding service interruptions and unauthorized diversion endpoints. Telemetry logs and initial user reports confirmed unauthorized session requests.",
+    statute: "Statutory Incident Protocol §43A",
   },
   {
     locator: "LOC-P2",
-    label: "Targeted Interception & Apprehensions",
-    text: "Cyber Crime Cell initiated immediate network trace operations. Three prime suspects were intercepted at a transit hideout with active hardware rigs. Electronic evidence, encrypted flash storage, and 47 mobile devices were secured under forensic protocol.",
-    statute: "BSA §65B Forensic Custody",
+    label: "Targeted Interception & Records Secured",
+    text: "Rapid Response Unit initiated immediate technical trace and containment operations. Hardware rigs, encrypted local storage, and 47 network terminals were secured under chain-of-custody protocol.",
+    statute: "BSA §65B Forensic Standard",
   },
   {
     locator: "LOC-P3",
-    label: "Financial Recovery & Account Freezes",
-    text: "Coordinated inter-bank notices were served under emergency directives. Eight mule bank accounts holding illicit transfers were frozen within 90 minutes, securing recovery for affected institutions prior to dissipation.",
-    statute: "CrPC §102 Seizure Orders",
+    label: "Emergency Remediation & Asset Protection",
+    text: "Coordinated inter-agency notices were served under emergency directives. Eight mule accounts and endpoint routers were neutralized within 90 minutes, securing recovery prior to dissipation.",
+    statute: "Emergency Directive Orders",
   },
 ];
 
@@ -81,7 +86,7 @@ export function PdfInspector({
   const [currentPage, setCurrentPage] = React.useState(1);
   const totalPages = 1;
   const [copied, setCopied] = React.useState(false);
-  const [mode, setMode] = React.useState<"evidence" | "pressnote">(
+  const [mode, setMode] = React.useState<PdfInspectorMode>(
     fileUrl ? initialMode : "pressnote",
   );
 
@@ -94,7 +99,7 @@ export function PdfInspector({
     setSelectedParaLocator(activeLocator);
   }
 
-  function handleSwitchMode(newMode: "evidence" | "pressnote") {
+  function handleSwitchMode(newMode: PdfInspectorMode) {
     setMode(newMode);
     onModeChange?.(newMode);
   }
@@ -112,6 +117,8 @@ export function PdfInspector({
         pressNoteData.secondaryHeadline),
   );
 
+  const hasPib = Boolean(pressNoteData?.pib);
+
   function handlePrint() {
     window.print();
   }
@@ -120,7 +127,7 @@ export function PdfInspector({
     if (!pressNoteData) return;
     const textToCopy = `
 OFFICIAL PRESS RELEASE
-Department: ${pressNoteData.department ?? "State Police Investigation Dept"}
+Department: ${pressNoteData.department ?? "Incident Communications Bureau"}
 Title: ${documentTitle}
 Status: ${pressNoteData.status ?? "Draft"} (BSA §65B Certified)
 
@@ -163,7 +170,7 @@ Merkle Timestamp: ${new Date().toISOString()}
   function handleDownloadMarkdown() {
     if (!pressNoteData) return;
     const mdContent = `# OFFICIAL PRESS NOTE: ${documentTitle}
-**Department:** ${pressNoteData.department ?? "State Police Investigation Dept"}  
+**Department:** ${pressNoteData.department ?? "Incident Communications Bureau"}  
 **Status:** ${pressNoteData.status ?? "Draft"}  
 **Certification:** Bharatiya Sakshya Adhiniyam §65B  
 **Date:** ${new Date().toLocaleDateString("en-IN", { dateStyle: "long" })}  
@@ -242,6 +249,21 @@ ${pressNoteData.secondarySummary || ""}
               <Newspaper className="size-3" />
               Press Note PDF
             </button>
+            {hasPib && (
+              <button
+                type="button"
+                onClick={() => handleSwitchMode("pib")}
+                className={cn(
+                  "px-2.5 py-1 rounded-md font-medium text-[11px] transition-all cursor-pointer flex items-center gap-1.5",
+                  mode === "pib"
+                    ? "bg-background text-foreground shadow-xs font-semibold"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Newspaper className="size-3" />
+                PIB Note
+              </button>
+            )}
           </div>
 
           <span className="font-display text-xs sm:text-sm font-semibold truncate max-w-[120px] sm:max-w-xs text-foreground tracking-tight hidden md:inline-block">
@@ -398,7 +420,7 @@ ${pressNoteData.secondarySummary || ""}
                   <div className="flex items-center gap-2">
                     <ShieldCheck className="size-3.5 text-emerald-800 shrink-0" />
                     <span className="font-semibold text-reader-ink">
-                      STATE POLICE INVESTIGATION DEPT • CASE RECORD
+                      INCIDENT COMMUNICATIONS BUREAU • CASE RECORD
                     </span>
                   </div>
                   <Badge variant="sage" className="text-[9px] font-mono py-0 px-2">
@@ -411,10 +433,10 @@ ${pressNoteData.secondarySummary || ""}
                     Primary Incident &amp; Evidence Deposition
                   </p>
                   <h3 className="font-display text-base sm:text-lg font-bold text-reader-ink mt-0.5 tracking-tight">
-                    {documentTitle || "First Information Report Extract"}
+                    {documentTitle || "Official Incident Record Extract"}
                   </h3>
                   <p className="font-mono text-[10px] text-reader-muted mt-1">
-                    Reference: FIR-402/2026/CYBER • Merkle Root: 4f8a9e2d...01c4
+                    Reference: INC-402/2026/BRIEF • Merkle Root: 4f8a9e2d...01c4
                   </p>
                 </div>
 
@@ -466,6 +488,11 @@ ${pressNoteData.secondarySummary || ""}
                 </div>
               </div>
             )
+          ) : mode === "pib" && pressNoteData?.pib ? (
+            /* Mode C: GOI PIB-style press note (falls back to Mode B without pib data) */
+            <div className="reader-paper p-4 sm:p-6 bg-white">
+              <PibPressNote input={pressNoteData.pib} />
+            </div>
           ) : (
             /* Mode B: Generated Official Press Note PDF Document */
             <div className="reader-paper p-6 sm:p-9 space-y-6 bg-white text-slate-900 font-sans">
@@ -473,7 +500,7 @@ ${pressNoteData.secondarySummary || ""}
               <div className="border-b-2 border-slate-900 pb-4 text-center space-y-1 print-border">
                 <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-widest text-slate-600 mb-2">
                   <span className="font-semibold text-slate-800">
-                    {pressNoteData?.department || "STATE POLICE INVESTIGATION DEPT"}
+                    {pressNoteData?.department || "INCIDENT BRIEFING & COMMUNICATIONS BUREAU"}
                   </span>
                   <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-300 font-bold text-emerald-700 print-badge">
                     BSA §65B CERTIFIED DIGITAL RELEASE
@@ -654,7 +681,7 @@ ${pressNoteData.secondarySummary || ""}
         <div className="flex items-center gap-2">
           <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
           <span className="text-[0.7rem] font-medium text-foreground">
-            {mode === "pressnote" ? "Live Press Note PDF Sync" : "Sovereign OCR Active"}
+            {mode === "pib" ? "PIB Press Note Sync" : mode === "pressnote" ? "Live Press Note PDF Sync" : "Sovereign OCR Active"}
           </span>
           <span className="hidden sm:inline-block text-muted-foreground/40">•</span>
           <span className="hidden sm:inline-flex items-center gap-1 text-[0.7rem] text-muted-foreground font-mono">

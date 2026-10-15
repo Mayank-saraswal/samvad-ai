@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+import { getStore } from "@/server/context";
+
+const KEY_RE =
+  /^tenants\/[A-Za-z0-9_-]{1,64}\/docs\/[A-Za-z0-9_-]{1,64}\/(source\.[a-z0-9]{2,5}|figures\/[A-Za-z0-9_-]{1,80}\.[a-z0-9]{2,5})$/;
 
 export async function GET(req: NextRequest) {
   const { userId, isAuthenticated } = await auth();
@@ -13,6 +17,30 @@ export async function GET(req: NextRequest) {
 
   if (!key) {
     return new NextResponse("Missing key parameter", { status: 400 });
+  }
+
+  if (!KEY_RE.test(key)) {
+    return new NextResponse("Invalid key", { status: 400 });
+  }
+
+  // Verify document ownership: parse tenant/doc from key, require
+  // membership in tenant and existence of the document in that tenant.
+  const parts = key.split("/");
+  const tenantId = parts[1] ?? "";
+  const docId = parts[3] ?? "";
+  try {
+    const store = getStore();
+    const membership = await store.getMembership({ userId, tenantId });
+    if (!membership) {
+      return new NextResponse("Forbidden", { status: 403 });
+    }
+    const doc = await store.get({ id: docId, tenantId });
+    if (!doc) {
+      return new NextResponse("Document not found", { status: 404 });
+    }
+  } catch (err: unknown) {
+    console.error("[Storage Proxy] Ownership check failed:", err);
+    return new NextResponse("Failed to verify ownership", { status: 500 });
   }
 
   const endpoint = process.env.R2_S3_ENDPOINT;
@@ -43,14 +71,19 @@ export async function GET(req: NextRequest) {
     }
 
     const bytes = await res.Body.transformToByteArray();
+    const lower = key.toLowerCase();
     const contentType =
       res.ContentType ||
-      (key.toLowerCase().endsWith(".pdf")
+      (lower.endsWith(".pdf")
         ? "application/pdf"
-        : key.toLowerCase().endsWith(".png")
+        : lower.endsWith(".png")
         ? "image/png"
-        : key.toLowerCase().endsWith(".jpg") || key.toLowerCase().endsWith(".jpeg")
+        : lower.endsWith(".jpg") || lower.endsWith(".jpeg")
         ? "image/jpeg"
+        : lower.endsWith(".webp")
+        ? "image/webp"
+        : lower.endsWith(".gif")
+        ? "image/gif"
         : "application/octet-stream");
 
     return new NextResponse(Buffer.from(bytes), {
@@ -59,7 +92,7 @@ export async function GET(req: NextRequest) {
         "Content-Type": contentType,
         "Content-Length": String(res.ContentLength || bytes.length),
         "Content-Disposition": `inline; filename="${key.split("/").pop() || "evidence"}"`,
-        "Cache-Control": "private, max-age=3600",
+        "Cache-Control": "private, no-store",
       },
     });
   } catch (err: unknown) {

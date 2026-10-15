@@ -7,7 +7,7 @@
  * UUIDs so callers never invent keys. `sources.r2Key` stores the key built by
  * the r2 module — the seam between the two modules is that string, nothing more.
  */
-import { boolean, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, integer, jsonb, pgTable, text, timestamp, unique, uuid, index } from "drizzle-orm/pg-core";
 
 export const documents = pgTable("documents", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -16,7 +16,9 @@ export const documents = pgTable("documents", {
   status: text("status").notNull().default("draft"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  index("documents_tenant_id_idx").on(t.tenantId),
+]);
 
 export type DocumentRow = typeof documents.$inferSelect;
 export type NewDocument = typeof documents.$inferInsert;
@@ -34,7 +36,9 @@ export const sources = pgTable("sources", {
   sha256: text("sha256"),
   metadata: jsonb("metadata"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  index("sources_document_id_idx").on(t.documentId),
+]);
 
 export type SourceRow = typeof sources.$inferSelect;
 export type NewSource = typeof sources.$inferInsert;
@@ -48,7 +52,10 @@ export const memberships = pgTable("memberships", {
   tenantId: text("tenant_id").notNull(),
   role: text("role").notNull().default("contributor"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  unique("memberships_user_tenant_unique").on(t.userId, t.tenantId),
+  index("memberships_tenant_id_idx").on(t.tenantId),
+]);
 
 export type MembershipRow = typeof memberships.$inferSelect;
 export type NewMembership = typeof memberships.$inferInsert;
@@ -68,7 +75,10 @@ export const revisions = pgTable("revisions", {
   approvedBy: text("approved_by"),
   approvedAt: timestamp("approved_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  unique("revisions_doc_number_unique").on(t.documentId, t.revisionNumber),
+  index("revisions_document_id_idx").on(t.documentId),
+]);
 
 export type RevisionRow = typeof revisions.$inferSelect;
 export type NewRevision = typeof revisions.$inferInsert;

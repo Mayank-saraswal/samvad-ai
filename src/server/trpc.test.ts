@@ -35,16 +35,16 @@ describe("tRPC router", () => {
     const store = createMemoryDocumentsStore();
     const caller = createAppRouter(store).createCaller(signedIn);
 
-    const joined = await caller.memberships.join({ tenantId: "t-1", role: "approver" });
+    const joined = await caller.memberships.join({ tenantId: "t-1" });
     expect(joined.tenantId).toBe("t-1");
-    expect(joined.role).toBe("approver");
+    expect(joined.role).toBe("contributor");
 
     const list = await caller.memberships.list();
     expect(list).toHaveLength(1);
     expect(list[0]?.tenantId).toBe("t-1");
 
     const fetched = await caller.memberships.get({ tenantId: "t-1" });
-    expect(fetched?.role).toBe("approver");
+    expect(fetched?.role).toBe("contributor");
   });
 
   test("documents round-trip is tenant-scoped", async () => {

@@ -149,6 +149,10 @@ export function createMemoryDocumentsStore(): DocumentsStore & { size(): number 
       return row;
     },
     async addRevision(input) {
+      const duplicate = revisions.find(
+        (r) => r.documentId === input.documentId && r.revisionNumber === input.revisionNumber,
+      );
+      if (duplicate) throw new Error(`duplicate revisionNumber ${input.revisionNumber} for document ${input.documentId}`);
       revCounter += 1;
       const row: RevisionRecord = {
         id: `rev-${revCounter}`,

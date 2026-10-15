@@ -94,10 +94,14 @@ export async function approveDocumentAction(input: {
   documentId: string;
   tenantId: string;
   waitTokenId?: string;
+  attestationConfirmed: boolean;
 }): Promise<ActionResult<{ status: string }>> {
   const { userId, isAuthenticated, orgId, orgRole } = await auth();
   if (!isAuthenticated || !userId) {
     return { success: false, error: "Authentication required to approve a press note." };
+  }
+  if (input.attestationConfirmed !== true) {
+    return { success: false, error: "Crime/casualty attestation checkbox is required before approval." };
   }
 
   try {
@@ -110,6 +114,19 @@ export async function approveDocumentAction(input: {
         success: false,
         error: `Access denied: Role '${role}' cannot certify releases. Approver role required.`,
       };
+    }
+
+    // Separation of duties + seal check before mutating.
+    const detail = await store.get({ id: input.documentId, tenantId: input.tenantId });
+    if (!detail) {
+      return { success: false, error: "Document not found or tenant mismatch." };
+    }
+    if (detail.status === "approved") {
+      return { success: false, error: "Document is already sealed and approved." };
+    }
+    const latest = detail.revisions[detail.revisions.length - 1];
+    if (latest && latest.authorId === userId) {
+      return { success: false, error: "Separation of duties: the drafting officer cannot approve their own draft." };
     }
 
     const approved = await store.approve({
@@ -274,12 +291,22 @@ export async function searchPrecedentsAction(input: {
   tenantId: string;
   queryText: string;
 }): Promise<ActionResult<readonly { id: string; text: string; score: number }[]>> {
-  const { userId, isAuthenticated } = await auth();
+  const { userId, isAuthenticated, orgId, orgRole } = await auth();
   if (!isAuthenticated || !userId) {
     return { success: false, error: "Authentication required to search precedents." };
   }
 
   try {
+    const store = getStore();
+    const membership = await store.getMembership({ userId, tenantId: input.tenantId });
+    // Clerk org mapping counts as membership for org workspaces.
+    const hasOrgAccess = orgId === input.tenantId && (orgRole === "org:admin" || orgRole === "org:member" || orgRole === "org:auditor");
+    if (!membership && !hasOrgAccess) {
+      return { success: false, error: "Tenant membership required to search precedents." };
+    }
+    if (typeof input.queryText !== "string" || input.queryText.trim().length < 3) {
+      return { success: false, error: "Query text must be at least 3 characters." };
+    }
     const vectorIndex = getVectorIndex();
 
     const searchRes = await vectorIndex.searchSimilar({
@@ -380,6 +407,101 @@ export async function mintUploadTicketAction(input: {
   }
 }
 
+export async function uploadFigureAction(
+  formData: FormData,
+): Promise<ActionResult<{ id: string; caption: string; imageUrl: string; key: string }>> {
+  const { userId, isAuthenticated, orgId, orgRole } = await auth();
+  if (!isAuthenticated || !userId) {
+    return { success: false, error: "Authentication required to upload figures." };
+  }
+
+  try {
+    const tenantId = formData.get("tenantId");
+    const documentId = formData.get("documentId");
+    const caption = formData.get("caption");
+    const file = formData.get("file");
+    if (typeof tenantId !== "string" || typeof documentId !== "string") {
+      return { success: false, error: "tenantId and documentId are required." };
+    }
+    if (typeof caption !== "string" || caption.trim().length === 0) {
+      return { success: false, error: "A caption is required for every figure." };
+    }
+    if (!(file instanceof File)) {
+      return { success: false, error: "An image file is required." };
+    }
+
+    const store = getStore();
+    const role = await resolveUserRole(store, userId, tenantId, orgId, orgRole);
+    if (role === "auditor") {
+      return { success: false, error: "Auditors have read-only permissions and cannot upload figures." };
+    }
+    const doc = await store.get({ id: documentId, tenantId });
+    if (!doc) {
+      return { success: false, error: "Document not found or tenant mismatch." };
+    }
+    if (doc.status === "approved") {
+      return { success: false, error: "Document is sealed. Figures cannot be added after approval." };
+    }
+
+    const MAX_FIGURE_BYTES = 10 * 1024 * 1024;
+    if (file.size <= 0 || file.size > MAX_FIGURE_BYTES) {
+      return { success: false, error: "Figure must be a non-empty image up to 10 MB." };
+    }
+    const ext = file.name.toLowerCase().endsWith(".png")
+      ? "png"
+      : file.name.toLowerCase().endsWith(".webp")
+      ? "webp"
+      : file.name.toLowerCase().endsWith(".gif")
+      ? "gif"
+      : "jpg";
+    const allowedTypes = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+    if (!allowedTypes.includes(file.type.toLowerCase())) {
+      return { success: false, error: "Figure must be PNG, JPG, WEBP or GIF." };
+    }
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const isPng = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
+    const isJpg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+    const isGif = bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46;
+    const isWebp = bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46;
+    if (!isPng && !isJpg && !isGif && !isWebp) {
+      return { success: false, error: "File content is not a recognized image." };
+    }
+
+    const endpoint = process.env.R2_S3_ENDPOINT;
+    const accessKeyId = process.env.R2_ACCESS_KEY_ID;
+    const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+    const bucket = process.env.R2_BUCKET || "samvaad-ai";
+    if (!endpoint || !accessKeyId || !secretAccessKey) {
+      return { success: false, error: "Storage module not configured." };
+    }
+    const { S3Client, PutObjectCommand } = await import("@aws-sdk/client-s3");
+    const s3 = new S3Client({ region: "auto", endpoint, credentials: { accessKeyId, secretAccessKey } });
+    const figureId = crypto.randomUUID();
+    const key = `tenants/${tenantId}/docs/${documentId}/figures/${figureId}.${ext}`;
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        Body: Buffer.from(bytes),
+        ContentType: file.type,
+        ContentLength: bytes.length,
+      }),
+    );
+
+    return {
+      success: true,
+      data: {
+        id: figureId,
+        caption: caption.trim().slice(0, 200),
+        imageUrl: `/api/storage/file?key=${encodeURIComponent(key)}`,
+        key,
+      },
+    };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : "Failed to upload figure" };
+  }
+}
+
 export async function completeUploadAction(input: {
   tenantId: string;
   documentId: string;
@@ -397,6 +519,19 @@ export async function completeUploadAction(input: {
     const role = await resolveUserRole(store, userId, input.tenantId, orgId, orgRole);
     if (role === "auditor") {
       return { success: false, error: "Auditors have read-only permissions and cannot complete file uploads." };
+    }
+
+    // Verify key was minted for this tenant/document and document exists in tenant.
+    const expectedPrefix = `tenants/${input.tenantId}/docs/${input.documentId}/`;
+    if (!input.key.startsWith(expectedPrefix)) {
+      return { success: false, error: "Upload key does not match this tenant/document." };
+    }
+    if (!input.sha256 || input.sha256.trim().length < 8) {
+      return { success: false, error: "sha256 digest is required to complete an upload." };
+    }
+    const doc = await store.get({ id: input.documentId, tenantId: input.tenantId });
+    if (!doc) {
+      return { success: false, error: "Document not found or tenant mismatch." };
     }
 
     const source = await store.addSource({

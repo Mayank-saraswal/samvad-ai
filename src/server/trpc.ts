@@ -94,16 +94,20 @@ export function createAppRouter(
         .input(
           z.object({
             tenantId: tenantInput,
-            role: z.enum(["contributor", "approver", "auditor"]).default("contributor"),
           }),
         )
-        .mutation(({ input, ctx }) =>
-          store.addMembership({
+        .mutation(async ({ input, ctx }) => {
+          const existing = await store.getMembership({
             userId: ctx.session.user.id,
             tenantId: input.tenantId,
-            role: input.role,
-          }),
-        ),
+          });
+          if (existing) return existing;
+          return store.addMembership({
+            userId: ctx.session.user.id,
+            tenantId: input.tenantId,
+            role: "contributor",
+          });
+        }),
     }),
 
     documents: t.router({
@@ -157,6 +161,14 @@ export function createAppRouter(
         )
         .mutation(async ({ input, ctx }) => {
           await requireMembership(ctx.session.user.id, input.tenantId, "contributor");
+          const doc = await store.get({ id: input.documentId, tenantId: input.tenantId });
+          if (!doc) throw new TRPCError({ code: "NOT_FOUND", message: "document not found" });
+          if (doc.tenantId !== input.tenantId) {
+            throw new TRPCError({ code: "FORBIDDEN", message: "document does not belong to tenant" });
+          }
+          if (doc.status === "approved") {
+            throw new TRPCError({ code: "FORBIDDEN", message: "approved documents are sealed" });
+          }
           return store.addRevision({
             documentId: input.documentId,
             revisionNumber: input.revisionNumber,
@@ -211,11 +223,20 @@ export function createAppRouter(
             documentId: z.string().min(1),
             key: z.string().min(1),
             kind: z.enum(["form", "pdf", "image", "audio"]),
-            sha256: z.string().optional(),
+            sha256: z.string().min(1),
           })
         )
         .mutation(async ({ input, ctx }) => {
           await requireMembership(ctx.session.user.id, input.tenantId, "contributor");
+          const expectedPrefix = `tenants/${input.tenantId}/docs/${input.documentId}/`;
+          if (!input.key.startsWith(expectedPrefix)) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "key does not match tenant/document scope" });
+          }
+          const doc = await store.get({ id: input.documentId, tenantId: input.tenantId });
+          if (!doc) throw new TRPCError({ code: "NOT_FOUND", message: "document not found" });
+          if (doc.tenantId !== input.tenantId) {
+            throw new TRPCError({ code: "FORBIDDEN", message: "document does not belong to tenant" });
+          }
           return store.addSource({
             documentId: input.documentId,
             kind: input.kind,

@@ -184,6 +184,30 @@ export function createDrizzleDocumentsStore(db: NodePgDatabase<typeof schema>): 
     },
 
     async approve(input): Promise<DocumentRecord | null> {
+      // Guard: if already approved, return row without changes.
+      const existing = await db
+        .select({
+          id: schema.documents.id,
+          tenantId: schema.documents.tenantId,
+          title: schema.documents.title,
+          status: schema.documents.status,
+          createdAt: schema.documents.createdAt,
+        })
+        .from(schema.documents)
+        .where(and(eq(schema.documents.id, input.id), eq(schema.documents.tenantId, input.tenantId)))
+        .limit(1);
+      const current = existing[0];
+      if (!current || !isDocumentStatus(current.status)) return null;
+      if (current.status === "approved") {
+        return {
+          id: current.id,
+          tenantId: current.tenantId,
+          title: current.title,
+          status: current.status,
+          createdAt: current.createdAt,
+        };
+      }
+
       const updated = await db
         .update(schema.documents)
         .set({ status: "approved", updatedAt: new Date() })
@@ -199,15 +223,24 @@ export function createDrizzleDocumentsStore(db: NodePgDatabase<typeof schema>): 
       const row = updated[0];
       if (!row || !isDocumentStatus(row.status)) return null;
 
-      // Update the latest revision to approved
-      await db
-        .update(schema.revisions)
-        .set({
-          approved: true,
-          approvedBy: input.approvedBy,
-          approvedAt: new Date(),
-        })
-        .where(eq(schema.revisions.documentId, input.id));
+      // Update only the latest revision (max revisionNumber) to approved.
+      const revRows = await db
+        .select({ id: schema.revisions.id, revisionNumber: schema.revisions.revisionNumber })
+        .from(schema.revisions)
+        .where(eq(schema.revisions.documentId, input.id))
+        .orderBy(desc(schema.revisions.revisionNumber))
+        .limit(1);
+      const latest = revRows[0];
+      if (latest) {
+        await db
+          .update(schema.revisions)
+          .set({
+            approved: true,
+            approvedBy: input.approvedBy,
+            approvedAt: new Date(),
+          })
+          .where(eq(schema.revisions.id, latest.id));
+      }
 
       return {
         id: row.id,

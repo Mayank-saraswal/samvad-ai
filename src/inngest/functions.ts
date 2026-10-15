@@ -77,6 +77,7 @@ export const uploadComplete = inngest.createFunction(
       const audioResult = await step.run("execute-audio-transcription", async () => {
         let transcript = "";
         let timestampedTranscript = "";
+        let transcriptionFailed = false;
         if (process.env.SARVAM_API_KEY && audioBase64) {
           try {
             const { createSarvamTranscriber } = await import("@/lib/stt/sarvam");
@@ -90,16 +91,78 @@ export const uploadComplete = inngest.createFunction(
             if (isOk(res)) {
               transcript = res.value.transcript;
               timestampedTranscript = res.value.timestampedTranscript || res.value.transcript;
+            } else {
+              transcriptionFailed = true;
             }
           } catch (sttErr) {
             console.warn("[Inngest STT] Sarvam transcription warning:", sttErr);
+            transcriptionFailed = true;
           }
+        } else if (process.env.SARVAM_API_KEY && r2Key) {
+          // Industry standard: fetch audio bytes from R2 with prefix, size,
+          // and content-type guards instead of trusting inline payloads.
+          try {
+            const { S3Client, GetObjectCommand, HeadObjectCommand } = await import("@aws-sdk/client-s3");
+            const { isOk } = await import("@/lib/result/result");
+            const endpoint = process.env.R2_S3_ENDPOINT;
+            const accessKeyId = process.env.R2_ACCESS_KEY_ID;
+            const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+            const bucket = process.env.R2_BUCKET || "samvaad-ai";
+            if (!endpoint || !accessKeyId || !secretAccessKey) {
+              transcriptionFailed = true;
+            } else {
+              const s3 = new S3Client({
+                region: "auto",
+                endpoint,
+                credentials: { accessKeyId, secretAccessKey },
+              });
+              const { transcribeAudioFromStorage } = await import("@/lib/stt/audio-source");
+              const { createSarvamTranscriber } = await import("@/lib/stt/sarvam");
+              const res = await transcribeAudioFromStorage(
+                {
+                  head: async (key) => {
+                    const out = await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+                    return { sizeBytes: out.ContentLength ?? 0, contentType: out.ContentType ?? null };
+                  },
+                  getBytes: async (key, opts) => {
+                    const out = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }), {
+                      abortSignal: opts?.signal,
+                    });
+                    if (!out.Body) throw new Error("audio body empty");
+                    return new Uint8Array(await out.Body.transformToByteArray());
+                  },
+                },
+                createSarvamTranscriber({ apiKey: process.env.SARVAM_API_KEY }),
+                r2Key,
+                {
+                  expectedPrefix: `tenants/${tenantId}/docs/${documentId}/`,
+                  languageCode: "hi-IN",
+                },
+              );
+              if (isOk(res)) {
+                transcript = res.value.transcript;
+                timestampedTranscript = res.value.timestampedTranscript || res.value.transcript;
+              } else {
+                transcriptionFailed = true;
+              }
+            }
+          } catch (sttErr) {
+            console.warn("[Inngest STT] R2 audio transcription warning:", sttErr);
+            transcriptionFailed = true;
+          }
+        } else {
+          transcriptionFailed = true;
         }
         return {
-          transcript: transcript || "Audio evidence deposition recorded and cryptographically sealed under BSA §65B.",
-          timestamped: timestampedTranscript || transcript || "[00:00 - 00:30] Audio evidence recorded under BSA §65B.",
+          transcript,
+          timestamped: timestampedTranscript,
+          failed: transcriptionFailed || transcript.trim().length === 0,
         };
       });
+
+      if (audioResult.failed) {
+        return { status: "failed", target: "audio-transcription", documentId, error: "STT unavailable or empty; no synthetic evidence persisted." };
+      }
 
       // 1. Index audio evidence into Vector DB as immutable Source of Truth
       await step.run("index-audio-vector-source-of-truth", async () => {
@@ -149,14 +212,15 @@ export const uploadComplete = inngest.createFunction(
           return genRes.value;
         }
 
+        // Deterministic English-only fallback (secondary locale injected at render time).
         return {
           headline1: `Audio Evidence Record (${sourceId.slice(0, 8)})`,
-          headline2: "Deposition recorded and anchored under Bharatiya Sakshya Adhiniyam §65B",
-          headline3: "Forensic chain of custody active in sovereign repository",
+          headline2: "Deposition recorded and sealed under the applicable evidence protocol",
+          headline3: "Chain of custody active in the sovereign repository",
           summary: audioResult.transcript.slice(0, 300),
           detail: audioResult.timestamped,
-          secondaryHeadline: "ऑडियो साक्ष्य अभिलेख एवं विवरण",
-          secondarySummary: "भारतीय साक्ष्य अधिनियम की धारा 65बी के तहत ऑडियो साक्ष्य सुरक्षित किया गया।",
+          secondaryHeadline: "Secondary locale headline pending translation pack",
+          secondarySummary: "Secondary locale summary pending translation pack",
           spans: [{ sourceId, locator: "LOC-A1", text: audioResult.transcript.slice(0, 300) }],
           claims: { event: [{ value: audioResult.transcript.slice(0, 100), spanIndex: 0 }] },
         };
@@ -165,11 +229,26 @@ export const uploadComplete = inngest.createFunction(
       // 3. Persist generated press note & citation locators to database
       await step.run("persist-audio-dossier-revision", async () => {
         const { getStore } = await import("@/server/context");
+        const { pibFromPress } = await import("@/lib/press-note/from-press");
         const store = getStore();
         const doc = await store.get({ id: documentId, tenantId });
         if (!doc) return;
 
         const nextRevNumber = (doc.revisions.length || 0) + 1;
+
+        const prevPib = ((doc.revisions[doc.revisions.length - 1]?.diff ?? {}) as Record<string, unknown>)["pib"] as
+          | Record<string, unknown>
+          | undefined;
+        const fresh = pibFromPress(
+          generatedPress,
+          "Ministry of Statistics and Programme Implementation",
+          new Date().toLocaleDateString("en-IN", { dateStyle: "long" }),
+        );
+        const pib = {
+          ...fresh,
+          figures: Array.isArray(prevPib?.["figures"]) ? (prevPib?.["figures"] as unknown[]) : undefined,
+          tables: Array.isArray(prevPib?.["tables"]) ? (prevPib?.["tables"] as unknown[]) : undefined,
+        };
 
         await store.addRevision({
           documentId,
@@ -184,6 +263,7 @@ export const uploadComplete = inngest.createFunction(
             detail: generatedPress.detail,
             secondaryHeadline: generatedPress.secondaryHeadline,
             secondarySummary: generatedPress.secondarySummary,
+            pib,
           },
           factsSnapshot: {
             spans: generatedPress.spans,
@@ -314,13 +394,17 @@ export const uploadComplete = inngest.createFunction(
           }
         }
 
-        // Fallback baseline if all external AI services are unavailable
+        // Fail loud: never persist synthetic evidence when all OCR engines are offline.
         if (!extractedMarkdown) {
-          extractedMarkdown = `Official Evidence Record (${r2Key ?? documentId})\nPrimary deposition verified and secured under BSA §65B protocol.\nForensic custody active in Cloudflare R2 sovereign repository.`;
+          return { markdown: "", pageCount: 0, engine: "none", failed: true };
         }
 
-        return { markdown: extractedMarkdown, pageCount, engine: ocrEngineUsed };
+        return { markdown: extractedMarkdown, pageCount, engine: ocrEngineUsed, failed: false };
       });
+
+      if (ocrOutput.failed) {
+        return { status: "failed", documentId, error: "OCR engines unavailable or empty; no synthetic evidence persisted." };
+      }
 
       // 3. Index extracted evidence into Vector DB as immutable Source of Truth
       await step.run("index-evidence-vector-source-of-truth", async () => {
@@ -389,14 +473,15 @@ export const uploadComplete = inngest.createFunction(
           }),
         );
 
+        // Deterministic English-only fallback (secondary locale injected at render time).
         return {
           headline1: doc?.title || `Official Case Record (${sourceId.slice(0, 8)})`,
-          headline2: "Electronic evidence secured under Bharatiya Sakshya Adhiniyam §65B",
-          headline3: "Forensic chain of custody active in sovereign repository",
-          summary: spans[0]?.text || "Case record documented with cryptographic citation groundings.",
+          headline2: "Electronic evidence secured under the applicable evidence protocol",
+          headline3: "Chain of custody active in the sovereign repository",
+          summary: spans[0]?.text || "Case record documented with citation groundings.",
           detail: ocrOutput.markdown.slice(0, 1000),
-          secondaryHeadline: "आधिकारिक साक्ष्य एवं प्रेस विज्ञप्ति",
-          secondarySummary: "इलेक्ट्रॉनिक साक्ष्य को बीएसए धारा 65बी के तहत सुरक्षित किया गया।",
+          secondaryHeadline: "Secondary locale headline pending translation pack",
+          secondarySummary: "Secondary locale summary pending translation pack",
           spans,
           claims: { event: [{ value: doc?.title || "Case Record", spanIndex: 0 }] },
         };
@@ -405,11 +490,26 @@ export const uploadComplete = inngest.createFunction(
       // 5. Persist synthesized Press Note & citation locators to database
       const persistResult = await step.run("persist-facts-to-dossier", async () => {
         const { getStore } = await import("@/server/context");
+        const { pibFromPress } = await import("@/lib/press-note/from-press");
         const store = getStore();
         const doc = await store.get({ id: documentId, tenantId });
         if (!doc) return { persisted: false, error: "Document not found" };
 
         const nextRevNumber = (doc.revisions.length || 0) + 1;
+
+        const prevPib = ((doc.revisions[doc.revisions.length - 1]?.diff ?? {}) as Record<string, unknown>)["pib"] as
+          | Record<string, unknown>
+          | undefined;
+        const fresh = pibFromPress(
+          generatedPress,
+          "Ministry of Statistics and Programme Implementation",
+          new Date().toLocaleDateString("en-IN", { dateStyle: "long" }),
+        );
+        const pib = {
+          ...fresh,
+          figures: Array.isArray(prevPib?.["figures"]) ? (prevPib?.["figures"] as unknown[]) : undefined,
+          tables: Array.isArray(prevPib?.["tables"]) ? (prevPib?.["tables"] as unknown[]) : undefined,
+        };
 
         const revision = await store.addRevision({
           documentId,
@@ -424,6 +524,7 @@ export const uploadComplete = inngest.createFunction(
             detail: generatedPress.detail,
             secondaryHeadline: generatedPress.secondaryHeadline,
             secondarySummary: generatedPress.secondarySummary,
+            pib,
           },
           factsSnapshot: {
             spans: generatedPress.spans,
