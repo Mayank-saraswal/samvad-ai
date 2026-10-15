@@ -1,8 +1,14 @@
+import * as React from "react";
+import { Suspense } from "react";
+import { connection } from "next/server";
 import { SignIn } from "@clerk/nextjs";
 import { Check } from "lucide-react";
 import { SamvaadLogo } from "@/components/brand/logo";
 
-export default function SignInPage(): React.JSX.Element {
+export const instant = false;
+
+export default async function SignInPage(): Promise<React.JSX.Element> {
+  await connection();
   return (
     <div className="min-h-screen bg-background p-3 sm:p-4 lg:grid lg:grid-cols-[1.05fr_0.95fr] lg:gap-4 flex flex-col justify-center">
       {/* Left Column: Rounded Parchment Branding Card (Matches Screenshot 1) */}
@@ -64,7 +70,8 @@ export default function SignInPage(): React.JSX.Element {
 
           {/* Clerk Sign In with Loreline Custom Theme */}
           <div className="mt-8">
-            <SignIn
+            <Suspense fallback={<div className="h-96 w-full animate-pulse rounded-2xl bg-card/50" />}>
+              <SignIn
               routing="path"
               path="/sign-in"
               signUpUrl="/sign-up"
@@ -95,6 +102,7 @@ export default function SignInPage(): React.JSX.Element {
                 },
               }}
             />
+            </Suspense>
           </div>
 
           <p className="mt-8 text-center text-xs text-muted-foreground">

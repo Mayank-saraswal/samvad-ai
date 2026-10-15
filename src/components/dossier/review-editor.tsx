@@ -16,7 +16,10 @@ import {
   CheckCircle2,
   ShieldCheck,
   Lock,
+  CreditCard,
 } from "lucide-react";
+import { useAuth } from "@clerk/nextjs";
+import { checkHasFeature, BILLING_FEATURES, resolveActiveTierName } from "@/lib/billing/plans";
 import { checkNeutrality, type NeutralityFlag } from "@/lib/press-facts/neutrality";
 import { HEADLINE_MAX_WORDS } from "@/lib/press-facts/bundle";
 import { approveDocumentAction, saveRevisionAction, searchPrecedentsAction } from "@/app/actions";
@@ -91,6 +94,8 @@ export function ReviewEditor({
   userRole = "approver",
 }: ReviewEditorProps): React.JSX.Element {
   const router = useRouter();
+  const { has } = useAuth();
+  const activeTier = resolveActiveTierName(has);
   const [doc, setDoc] = React.useState<DocumentDetail>(initialDoc);
   const [status, setStatus] = React.useState<DocumentStatus>(initialDoc.status);
   const [activeLocator, setActiveLocator] = React.useState<string | null>(null);
@@ -283,6 +288,11 @@ export function ReviewEditor({
                 <Scale className="size-3" /> Auditor (Read-Only)
               </Badge>
             )}
+            <Link href="/dossiers/billing">
+              <Badge variant="outline" className="gap-1 px-2.5 py-0.5 text-xs font-mono hover:border-brand/50 hover:bg-brand-soft/20 cursor-pointer transition-colors">
+                <CreditCard className="size-3 text-brand" /> Tier: {activeTier.name}
+              </Badge>
+            </Link>
             {status === "approved" ? (
               <Link href={`/verify/${doc.id}`} target="_blank">
                 <Badge variant="sage" className="gap-1 px-2.5 py-0.5 hover:ring-1 hover:ring-emerald-500/50 cursor-pointer">

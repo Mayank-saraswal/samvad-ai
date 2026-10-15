@@ -42,10 +42,15 @@ export function InteractiveVoiceConversation(): React.JSX.Element {
   const fallbackScenario = CHAT_SCENARIOS[0]!;
   const scenario = CHAT_SCENARIOS[activeScenarioIndex] ?? fallbackScenario;
 
-  // Animated typewriter effect for assistant's chat bubble
-  React.useEffect(() => {
+  const [prevMessage, setPrevMessage] = React.useState<string>(scenario.assistantMessage);
+  if (prevMessage !== scenario.assistantMessage) {
+    setPrevMessage(scenario.assistantMessage);
     setTypingText("");
     setIsTyping(true);
+  }
+
+  // Animated typewriter effect for assistant's chat bubble
+  React.useEffect(() => {
     const fullText = scenario.assistantMessage;
     let idx = 0;
 

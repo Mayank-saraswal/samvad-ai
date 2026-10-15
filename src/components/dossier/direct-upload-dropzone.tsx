@@ -73,12 +73,14 @@ export function DirectUploadDropzone({
       const parts = selectedFile.name.split(".");
       const ext = (parts.length > 1 ? parts[parts.length - 1] : "pdf")?.toLowerCase() ?? "pdf";
 
+      const fileContentType = selectedFile.type || "application/octet-stream";
+
       // 1. Mint short-lived S3 upload ticket
       const mintRes = await mintUploadTicketAction({
         tenantId,
         documentId,
         extension: ext,
-        contentType: selectedFile.type || "application/octet-stream",
+        contentType: fileContentType,
         contentLengthBytes: selectedFile.size,
       });
 
@@ -97,7 +99,7 @@ export function DirectUploadDropzone({
       const uploadPromise = new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open("PUT", uploadUrl, true);
-        xhr.setRequestHeader("Content-Type", selectedFile.type);
+        xhr.setRequestHeader("Content-Type", fileContentType);
 
         xhr.upload.onprogress = (event) => {
           if (event.lengthComputable) {

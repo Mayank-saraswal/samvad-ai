@@ -15,6 +15,7 @@ import {
   type MembershipRecord,
   type RevisionRecord,
   type SourceRecord,
+  type SubscriptionRecord,
 } from "./store";
 
 export function createDrizzleDocumentsStore(db: NodePgDatabase<typeof schema>): DocumentsStore {
@@ -279,6 +280,64 @@ export function createDrizzleDocumentsStore(db: NodePgDatabase<typeof schema>): 
         }
       }
       return records;
+    },
+
+    async upsertSubscription(input): Promise<SubscriptionRecord> {
+      const inserted = await db
+        .insert(schema.subscriptions)
+        .values({
+          id: input.id,
+          entityId: input.entityId,
+          payerType: input.payerType ?? "organization",
+          planSlug: input.planSlug,
+          status: input.status,
+          currentPeriodEnd: input.currentPeriodEnd ?? null,
+          updatedAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: schema.subscriptions.id,
+          set: {
+            entityId: input.entityId,
+            payerType: input.payerType ?? "organization",
+            planSlug: input.planSlug,
+            status: input.status,
+            currentPeriodEnd: input.currentPeriodEnd ?? null,
+            updatedAt: new Date(),
+          },
+        })
+        .returning();
+      const row = inserted[0];
+      if (!row) throw new Error("subscriptions upsert returned no row");
+      return {
+        id: row.id,
+        entityId: row.entityId,
+        payerType: row.payerType,
+        planSlug: row.planSlug,
+        status: row.status,
+        currentPeriodEnd: row.currentPeriodEnd,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+      };
+    },
+
+    async getSubscription(entityId): Promise<SubscriptionRecord | null> {
+      const rows = await db
+        .select()
+        .from(schema.subscriptions)
+        .where(eq(schema.subscriptions.entityId, entityId))
+        .limit(1);
+      const row = rows[0];
+      if (!row) return null;
+      return {
+        id: row.id,
+        entityId: row.entityId,
+        payerType: row.payerType,
+        planSlug: row.planSlug,
+        status: row.status,
+        currentPeriodEnd: row.currentPeriodEnd,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+      };
     },
   };
 }

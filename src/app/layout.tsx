@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { ClerkProvider } from "@clerk/nextjs";
 import { shadcn } from "@clerk/ui/themes";
 import { IBM_Plex_Mono, Manrope, Newsreader } from "next/font/google";
@@ -52,7 +53,9 @@ export default function RootLayout({
     >
       <body suppressHydrationWarning className="min-h-screen flex flex-col bg-background text-foreground">
         <ClerkProvider appearance={{ theme: shadcn }}>
-          <SiteHeader />
+          <Suspense fallback={null}>
+            <SiteHeader />
+          </Suspense>
           <main className="flex-1 min-h-screen bg-background text-foreground pt-14 sm:pt-16">{children}</main>
         </ClerkProvider>
       </body>

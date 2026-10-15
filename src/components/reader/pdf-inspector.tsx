@@ -55,12 +55,11 @@ export function PdfInspector({
   const [selectedParaLocator, setSelectedParaLocator] = React.useState<string | null>(
     activeLocator ?? "LOC-P1",
   );
-
-  React.useEffect(() => {
-    if (activeLocator) {
-      setSelectedParaLocator(activeLocator);
-    }
-  }, [activeLocator]);
+  const [prevLocator, setPrevLocator] = React.useState<string | null | undefined>(activeLocator);
+  if (activeLocator !== undefined && activeLocator !== prevLocator) {
+    setPrevLocator(activeLocator);
+    setSelectedParaLocator(activeLocator);
+  }
 
   const isPdf = fileUrl ? fileUrl.toLowerCase().includes(".pdf") : false;
 

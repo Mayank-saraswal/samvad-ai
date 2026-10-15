@@ -143,8 +143,9 @@ Useful commands: `npm run test` (all tests) · `npm run typecheck` ·
 migrations are prod-only).
 
 Needed in `.env.local`: `DATABASE_URL`, `DATABASE_URL_UNPOOLED`,
-`NEON_AUTH_BASE_URL`, `NEON_AUTH_COOKIE_SECRET`, R2 keys
-(`CLOUDFLARE_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
+`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` (Clerk dev keys via
+`npx clerk env pull`; production via `env pull --instance prod` after `deploy`),
+R2 keys (`CLOUDFLARE_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
 `R2_S3_ENDPOINT`), `MISTRAL_API_KEY`, `LITELLM_API_KEY` (+ `LITELLM_BASE_URL`,
 `LITELLM_MODEL`), `SARVAM_API_KEY`, `LAYA_API_KEY`, `INNGEST_DEV=1`.
 

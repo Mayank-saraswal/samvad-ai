@@ -148,10 +148,14 @@ const StreamingTranscriptBar = React.memo(function StreamingTranscriptBar({
 }: StreamingTranscriptBarProps): React.JSX.Element {
   const [typedTranscript, setTypedTranscript] = React.useState<string>("");
   const [isTyping, setIsTyping] = React.useState<boolean>(true);
-
-  React.useEffect(() => {
+  const [prevTarget, setPrevTarget] = React.useState<string>(targetTranscript);
+  if (prevTarget !== targetTranscript) {
+    setPrevTarget(targetTranscript);
     setTypedTranscript("");
     setIsTyping(true);
+  }
+
+  React.useEffect(() => {
     let charIndex = 0;
 
     const timer = setInterval(() => {

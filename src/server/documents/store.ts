@@ -58,6 +58,17 @@ export interface MembershipRecord {
   readonly createdAt: Date;
 }
 
+export interface SubscriptionRecord {
+  readonly id: string;
+  readonly entityId: string;
+  readonly payerType: string;
+  readonly planSlug: string;
+  readonly status: string;
+  readonly currentPeriodEnd: Date | null;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}
+
 export function isMembershipRole(value: string): value is MembershipRole {
   return (MEMBERSHIP_ROLES as readonly string[]).includes(value);
 }
@@ -72,6 +83,15 @@ export interface DocumentsStore {
   getMembership(input: { userId: string; tenantId: string }): Promise<MembershipRecord | null>;
   addMembership(input: { userId: string; tenantId: string; role: MembershipRole }): Promise<MembershipRecord>;
   listMemberships(userId: string): Promise<readonly MembershipRecord[]>;
+  upsertSubscription(input: {
+    id: string;
+    entityId: string;
+    payerType?: string;
+    planSlug: string;
+    status: string;
+    currentPeriodEnd?: Date | null;
+  }): Promise<SubscriptionRecord>;
+  getSubscription(entityId: string): Promise<SubscriptionRecord | null>;
 }
 
 export function isDocumentStatus(value: string): value is DocumentStatus {
@@ -83,6 +103,7 @@ export function createMemoryDocumentsStore(): DocumentsStore & { size(): number 
   const sources: SourceRecord[] = [];
   const revisions: RevisionRecord[] = [];
   const memberships: MembershipRecord[] = [];
+  const subscriptions: SubscriptionRecord[] = [];
   let docCounter = 0;
   let sourceCounter = 0;
   let revCounter = 0;
@@ -198,6 +219,28 @@ export function createMemoryDocumentsStore(): DocumentsStore & { size(): number 
     },
     async listMemberships(userId) {
       return memberships.filter((m) => m.userId === userId);
+    },
+    async upsertSubscription(input) {
+      const existingIdx = subscriptions.findIndex((s) => s.id === input.id || s.entityId === input.entityId);
+      const row: SubscriptionRecord = {
+        id: input.id,
+        entityId: input.entityId,
+        payerType: input.payerType ?? "organization",
+        planSlug: input.planSlug,
+        status: input.status,
+        currentPeriodEnd: input.currentPeriodEnd ?? null,
+        createdAt: new Date("2026-01-01T00:00:00Z"),
+        updatedAt: new Date("2026-01-01T00:00:00Z"),
+      };
+      if (existingIdx >= 0) {
+        subscriptions[existingIdx] = row;
+      } else {
+        subscriptions.push(row);
+      }
+      return row;
+    },
+    async getSubscription(entityId) {
+      return subscriptions.find((s) => s.entityId === entityId) ?? null;
     },
     size() {
       return docs.length;

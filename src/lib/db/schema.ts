@@ -72,3 +72,17 @@ export const revisions = pgTable("revisions", {
 
 export type RevisionRow = typeof revisions.$inferSelect;
 export type NewRevision = typeof revisions.$inferInsert;
+
+export const subscriptions = pgTable("subscriptions", {
+  id: text("id").primaryKey(), // Clerk subscription ID e.g. sub_xxx
+  entityId: text("entity_id").notNull(), // organization_id or user_id
+  payerType: text("payer_type").notNull().default("organization"), // organization | user
+  planSlug: text("plan_slug").notNull(), // e.g. org:starter, org:pro, org:enterprise
+  status: text("status").notNull(), // active, past_due, canceled, etc.
+  currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type SubscriptionRow = typeof subscriptions.$inferSelect;
+export type NewSubscription = typeof subscriptions.$inferInsert;

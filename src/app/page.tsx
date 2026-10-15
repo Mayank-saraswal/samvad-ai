@@ -18,6 +18,7 @@ import { SamvaadLogo } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
 import { InteractiveEvidenceDesk } from "@/components/home/interactive-evidence-desk";
 import { InteractiveVoiceConversation } from "@/components/home/interactive-voice-conversation";
+import { SovereignPricingCards } from "@/components/billing/sovereign-pricing-cards";
 
 export const instant = false;
 
@@ -324,124 +325,10 @@ export default async function HomePage(): Promise<React.JSX.Element> {
         </div>
       </section>
 
-      {/* Pricing Section (id="pricing") — Clean Loreline Cards & Tactile Buttons */}
+      {/* Pricing Section (id="pricing") — Connected to Clerk Billing in USD */}
       <section id="pricing" className="border-t border-border px-4 sm:px-6 lg:px-8 py-20 sm:py-28 lg:py-32 bg-card/25">
         <div className="mx-auto max-w-[76rem]">
-          <div className="mx-auto max-w-2xl text-center">
-            <p className="text-sm font-semibold text-brand-ink">Transparent plans</p>
-            <h2 className="mt-4 text-balance text-3xl sm:text-4xl lg:text-5xl font-normal leading-[1.04] tracking-[-0.045em] text-foreground font-sans">
-              Simple, transparent pricing.
-            </h2>
-            <p className="mt-4 text-sm sm:text-base leading-7 text-muted-foreground">
-              Choose the right tier for your team or agency.
-            </p>
-          </div>
-
-          <div className="mt-12 sm:mt-16 grid grid-cols-1 md:grid-cols-3 gap-5 lg:gap-6">
-            {/* Plan 1 */}
-            <div className="rounded-[2.25rem] border border-border bg-card p-6 sm:p-7 lg:p-8 flex flex-col justify-between shadow-soft hover:shadow-float transition-all duration-300">
-              <div>
-                <p className="text-sm font-semibold text-foreground">Officer Desk</p>
-                <p className="mt-2 text-xs text-muted-foreground">For individual spokespersons and field briefing officers.</p>
-                <div className="mt-6 flex items-baseline gap-1">
-                  <span className="text-4xl font-bold tracking-tight text-foreground">Free</span>
-                </div>
-                <div className="mt-8 space-y-3.5 text-xs text-muted-foreground">
-                  {[
-                    "Up to 50 evidence pages / month",
-                    "Basic OCR & claim extraction",
-                    "Dual-language press drafts (EN + HI)",
-                    "Standard verification reports",
-                  ].map((feat) => (
-                    <div key={feat} className="flex items-center gap-2.5">
-                      <CheckCircle2 className="size-4 text-brand-ink shrink-0" />
-                      <span>{feat}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <Button
-                size="lg"
-                variant="outline"
-                className="w-full mt-8 text-xs font-semibold"
-                render={<Link href="/sign-in" />}
-              >
-                Get Started
-              </Button>
-            </div>
-
-            {/* Plan 2: Highlighted Department Unit */}
-            <div className="rounded-[2.25rem] border-2 border-brand bg-card p-6 sm:p-7 lg:p-8 flex flex-col justify-between shadow-float relative">
-              <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-primary text-primary-foreground font-semibold text-[10px] uppercase tracking-wider shadow-xs">
-                Most Popular
-              </span>
-              <div>
-                <p className="text-sm font-semibold text-foreground">Department Unit</p>
-                <p className="mt-2 text-xs text-muted-foreground">For police headquarters, commissionerates, and PR divisions.</p>
-                <div className="mt-6 flex items-baseline gap-1">
-                  <span className="text-4xl font-bold tracking-tight text-foreground">₹4,999</span>
-                  <span className="text-xs text-muted-foreground">/ month</span>
-                </div>
-                <div className="mt-8 space-y-3.5 text-xs text-foreground/85">
-                  {[
-                    "Unlimited evidence ingest (PDFs & audio)",
-                    "Real-time voice & speech extraction",
-                    "Dual-agent consensus verification",
-                    "Multi-officer role-based approvals",
-                    "Priority support & fast processing",
-                  ].map((feat) => (
-                    <div key={feat} className="flex items-center gap-2.5">
-                      <CheckCircle2 className="size-4 text-brand-ink shrink-0" />
-                      <span>{feat}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <Button
-                size="lg"
-                variant="default"
-                className="w-full mt-8 text-xs font-semibold"
-                render={<Link href="/sign-in" />}
-              >
-                Choose Department Unit
-              </Button>
-            </div>
-
-            {/* Plan 3 */}
-            <div className="rounded-[2.25rem] border border-border bg-card p-6 sm:p-7 lg:p-8 flex flex-col justify-between shadow-soft hover:shadow-float transition-all duration-300">
-              <div>
-                <p className="text-sm font-semibold text-foreground">State Agency</p>
-                <p className="mt-2 text-xs text-muted-foreground">For state home departments, central agencies, and enterprise security.</p>
-                <div className="mt-6 flex items-baseline gap-1">
-                  <span className="text-4xl font-bold tracking-tight text-foreground">Custom</span>
-                </div>
-                <div className="mt-8 space-y-3.5 text-xs text-muted-foreground">
-                  {[
-                    "Dedicated sovereign VPC deployment",
-                    "Custom legal & statutory concordances",
-                    "Cryptographic audit archives",
-                    "Custom SLA & onboarding",
-                  ].map((feat) => (
-                    <div key={feat} className="flex items-center gap-2.5">
-                      <CheckCircle2 className="size-4 text-brand-ink shrink-0" />
-                      <span>{feat}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <Button
-                size="lg"
-                variant="outline"
-                className="w-full mt-8 text-xs font-semibold"
-                render={<Link href="/sign-in" />}
-              >
-                Contact Sales
-              </Button>
-            </div>
-          </div>
+          <SovereignPricingCards showHeader={true} />
         </div>
       </section>
 

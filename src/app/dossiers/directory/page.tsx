@@ -11,6 +11,7 @@ import {
   FileCheck2,
   Clock,
   Sparkles,
+  CreditCard,
 } from "lucide-react";
 import { getStore } from "@/server/context";
 import { Badge } from "@/components/ui/badge";
@@ -118,6 +119,14 @@ export default async function IncidentDirectoryPage(): Promise<React.JSX.Element
             <span className="text-[11px] font-mono px-1.5 py-0.5 rounded-full bg-brand-soft/70 text-brand-ink">
               {documents.length}
             </span>
+          </Link>
+          <div className="h-4 w-px bg-border/80" />
+          <Link
+            href="/dossiers/billing"
+            className="px-4 py-2 rounded-xl text-xs sm:text-sm font-medium text-muted-foreground hover:text-foreground transition-all duration-200 flex items-center gap-2 cursor-pointer"
+          >
+            <CreditCard className="size-3.5" />
+            <span>Billing &amp; Plans</span>
           </Link>
         </div>
 

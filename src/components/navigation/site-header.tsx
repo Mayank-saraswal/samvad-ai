@@ -31,7 +31,7 @@ const PUBLIC_NAV_LINKS: readonly NavLinkItem[] = [
   { label: "Home", href: "/" },
   { label: "About", href: "/#about" },
   { label: "How it works", href: "/#how" },
-  { label: "Pricing", href: "/#pricing" },
+  { label: "Pricing", href: "/pricing" },
 ];
 
 const AUTH_NAV_LINKS: readonly NavLinkItem[] = [
@@ -97,7 +97,7 @@ export function SiteHeader(): React.JSX.Element | null {
               link.href === "/"
                 ? pathname === "/"
                 : link.href === "/dossiers"
-                  ? pathname === "/dossiers" || (pathname.startsWith("/dossiers/") && pathname !== "/dossiers/directory")
+                  ? pathname === "/dossiers" || (pathname.startsWith("/dossiers/") && pathname !== "/dossiers/directory" && pathname !== "/dossiers/billing")
                   : pathname.startsWith(link.href) && !link.href.includes("#");
 
             return (
@@ -205,7 +205,7 @@ export function SiteHeader(): React.JSX.Element | null {
                 link.href === "/"
                   ? pathname === "/"
                   : link.href === "/dossiers"
-                    ? pathname === "/dossiers" || (pathname.startsWith("/dossiers/") && pathname !== "/dossiers/directory")
+                    ? pathname === "/dossiers" || (pathname.startsWith("/dossiers/") && pathname !== "/dossiers/directory" && pathname !== "/dossiers/billing")
                     : pathname.startsWith(link.href) && !link.href.includes("#");
 
               return (

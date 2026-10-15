@@ -6,17 +6,21 @@ import {
   ShieldAlert,
   Building2,
   FolderOpen,
+  CreditCard,
 } from "lucide-react";
 import { getStore } from "@/server/context";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { WorkspaceSelector } from "@/components/dossier/workspace-selector";
+import { resolveActiveTierName } from "@/lib/billing/plans";
 import type { MembershipRole } from "@/server/documents/store";
 
 export const instant = false;
 
 export default async function DossiersPage(): Promise<React.JSX.Element> {
-  const { isAuthenticated, userId, orgId, orgRole } = await auth();
+  const { isAuthenticated, userId, orgId, orgRole, has } = await auth();
   const user = isAuthenticated ? await currentUser() : null;
+  const activeTier = resolveActiveTierName(has);
 
   if (!isAuthenticated || !userId) {
     return (
@@ -132,6 +136,17 @@ export default async function DossiersPage(): Promise<React.JSX.Element> {
             <span>Active Directory</span>
             <span className="text-[11px] font-mono px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
               {documents.length}
+            </span>
+          </Link>
+          <div className="h-4 w-px bg-border/80" />
+          <Link
+            href="/dossiers/billing"
+            className="px-4 py-2 rounded-xl text-xs sm:text-sm font-medium text-muted-foreground hover:text-foreground transition-all duration-200 flex items-center gap-2 cursor-pointer"
+          >
+            <CreditCard className="size-3.5" />
+            <span>Billing &amp; Plans</span>
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-brand-soft/70 text-brand-ink">
+              {activeTier.slug === "free" ? "Free" : "Active"}
             </span>
           </Link>
         </div>
