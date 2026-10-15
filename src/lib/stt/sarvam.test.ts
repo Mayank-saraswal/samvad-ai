@@ -88,4 +88,25 @@ describe("sarvam speech-to-text module", () => {
       expect(res.value).toEqual(preset);
     }
   });
+
+  test("generates timestamped transcript segments for audio depositions", async () => {
+    const transcriber = createSarvamTranscriber({
+      apiKey: "dummy-key",
+      post: async () => ({
+        transcript: "Accused was apprehended at transit checkpost. Forty seven mobile devices recovered.",
+        language_code: "en-IN",
+      }),
+    });
+
+    const res = await transcriber.transcribe({
+      audioBytes: new Uint8Array([1, 2, 3]),
+    });
+
+    expect(isOk(res)).toBe(true);
+    if (isOk(res)) {
+      expect(res.value.timestampedTranscript).toContain("[00:00 - 00:06]");
+      expect(res.value.segments).toBeDefined();
+      expect(res.value.segments!.length).toBeGreaterThan(0);
+    }
+  });
 });

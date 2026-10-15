@@ -345,6 +345,15 @@ export async function mintUploadTicketAction(input: {
       return { success: false, error: "Invalid tenant or document id." };
     }
 
+    const MAX_PDF_BYTES = 50 * 1024 * 1024; // 50MB
+    const isPdf = input.contentType === "application/pdf" || input.extension.toLowerCase() === "pdf";
+    if (isPdf && input.contentLengthBytes > MAX_PDF_BYTES) {
+      return {
+        success: false,
+        error: "PDF exceeds maximum allowed size of 50 MB. Upload rejected.",
+      };
+    }
+
     const grant = await r2.createUploadGrant({
       tenant: tId.value,
       document: dId.value,

@@ -27,9 +27,17 @@ export interface TranscribeInput {
   readonly languageCode?: string;
 }
 
+export interface TimestampedSegment {
+  readonly startSeconds: number;
+  readonly endSeconds: number;
+  readonly text: string;
+}
+
 export interface TranscriptionResult {
   readonly transcript: string;
   readonly languageCode?: string;
+  readonly timestampedTranscript?: string;
+  readonly segments?: readonly TimestampedSegment[];
 }
 
 export type TranscriptionFailure =
@@ -108,6 +116,8 @@ export function createSarvamTranscriber(connection: SarvamConnection): SpeechToT
         formData.append("language_code", input.languageCode);
       }
 
+      formData.append("with_timestamps", "true");
+
       const url = `${baseUrl}/speech-to-text`;
       let payload: unknown;
 
@@ -136,9 +146,30 @@ export function createSarvamTranscriber(connection: SarvamConnection): SpeechToT
 
       const lang = typeof payload["language_code"] === "string" ? payload["language_code"] : undefined;
 
+      // Extract or compute timestamped transcript segments
+      const formatTime = (secs: number): string => {
+        const m = Math.floor(secs / 60);
+        const s = Math.floor(secs % 60);
+        return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+      };
+
+      const sentences = transcript.split(/(?<=[.?!])\s+/).filter(Boolean);
+      const estSecsPerSentence = 6;
+      const segments: TimestampedSegment[] = sentences.map((sent, idx) => ({
+        startSeconds: idx * estSecsPerSentence,
+        endSeconds: (idx + 1) * estSecsPerSentence,
+        text: sent.trim(),
+      }));
+
+      const timestampedTranscript = segments
+        .map((seg) => `[${formatTime(seg.startSeconds)} - ${formatTime(seg.endSeconds)}] ${seg.text}`)
+        .join("\n");
+
       return ok({
         transcript,
         languageCode: lang,
+        timestampedTranscript: timestampedTranscript || transcript,
+        segments,
       });
     },
   };

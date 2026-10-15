@@ -17,6 +17,8 @@ import {
   ShieldCheck,
   Lock,
   CreditCard,
+  Printer,
+  Newspaper,
 } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { checkHasFeature, BILLING_FEATURES, resolveActiveTierName } from "@/lib/billing/plans";
@@ -214,6 +216,8 @@ export function ReviewEditor({
           headline3,
           summary,
           detail,
+          secondaryHeadline,
+          secondarySummary,
         },
       });
       if (res.success) {
@@ -230,7 +234,15 @@ export function ReviewEditor({
               revisionNumber: nextRevNumber,
               authorId: currentUserId,
               reason,
-              diff: { headline1, headline2, headline3, summary, detail },
+              diff: {
+                headline1,
+                headline2,
+                headline3,
+                summary,
+                detail,
+                secondaryHeadline,
+                secondarySummary,
+              },
               factsSnapshot: null,
               bundleSnapshot: null,
               approved: false,
@@ -248,9 +260,14 @@ export function ReviewEditor({
   }
 
 
-  const activeSource = doc.sources.find((s) => s.kind === "pdf" || s.kind === "image");
+  const [selectedSourceId, setSelectedSourceId] = React.useState<string | null>(null);
+
+  const activeSource = selectedSourceId
+    ? doc.sources.find((s) => s.id === selectedSourceId)
+    : doc.sources.find((s) => s.kind === "pdf" || s.kind === "image") ?? doc.sources[0];
+
   const activeSourceUrl = activeSource?.r2Key
-    ? `https://storage.samvaad.ai/${activeSource.r2Key}`
+    ? `/api/storage/file?key=${encodeURIComponent(activeSource.r2Key)}`
     : undefined;
 
   return (
@@ -361,6 +378,22 @@ export function ReviewEditor({
               </div>
             </DialogContent>
           </Dialog>
+
+          {/* Export / Print PDF Action */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setLeftTab("pressnote");
+              setTimeout(() => {
+                window.print();
+              }, 150);
+            }}
+            className="gap-1.5 text-xs font-medium"
+            title="Print or Export as PDF"
+          >
+            <Printer className="size-3.5" /> Export PDF
+          </Button>
 
           {/* Save Revision Dialog */}
           {canEdit ? (
@@ -484,17 +517,59 @@ export function ReviewEditor({
         <div className="lg:col-span-5 space-y-6">
           <Card>
             <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <CardTitle>Case Evidence &amp; Sources</CardTitle>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1.5">
+                  <div className="inline-flex rounded-lg bg-muted/60 p-0.5 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setLeftTab("sources")}
+                      className={cn(
+                        "px-2.5 py-1 rounded-md font-medium text-[11px] transition-all cursor-pointer",
+                        leftTab === "sources"
+                          ? "bg-background text-foreground shadow-xs font-semibold"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      Sources ({doc.sources.length})
+                    </button>
+                    {activeSource && (
+                      <button
+                        type="button"
+                        onClick={() => setLeftTab("inspector")}
+                        className={cn(
+                          "px-2.5 py-1 rounded-md font-medium text-[11px] transition-all cursor-pointer flex items-center gap-1",
+                          leftTab === "inspector"
+                            ? "bg-background text-foreground shadow-xs font-semibold"
+                            : "text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        <FileText className="size-3" />
+                        Evidence File
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setLeftTab("pressnote")}
+                      className={cn(
+                        "px-2.5 py-1 rounded-md font-medium text-[11px] transition-all cursor-pointer flex items-center gap-1",
+                        leftTab === "pressnote"
+                          ? "bg-background text-foreground shadow-xs font-semibold"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      <Newspaper className="size-3" />
+                      Press Note PDF
+                    </button>
+                  </div>
                   {canEdit ? (
                     <Button
-                      variant="outline"
+                      variant={leftTab === "upload" ? "secondary" : "outline"}
                       size="xs"
                       onClick={() => setLeftTab(leftTab === "upload" ? "sources" : "upload")}
                       className="gap-1 text-[11px]"
                     >
-                      <Upload className="size-3" /> {leftTab === "upload" ? "View Sources" : "Upload File"}
+                      <Upload className="size-3" /> {leftTab === "upload" ? "Done" : "Upload"}
                     </Button>
                   ) : (
                     <Badge variant="outline" className="text-[10px] font-mono text-muted-foreground">
@@ -531,21 +606,41 @@ export function ReviewEditor({
                     }));
                   }}
                 />
-              ) : leftTab === "inspector" ? (
+              ) : leftTab === "inspector" || leftTab === "pressnote" ? (
                 <div className="space-y-2">
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    onClick={() => setLeftTab("sources")}
-                    className="text-muted-foreground gap-1"
-                  >
-                    <ArrowLeft className="size-3" /> Back to Sources List
-                  </Button>
+                  <div className="flex items-center justify-between">
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => setLeftTab("sources")}
+                      className="text-muted-foreground gap-1"
+                    >
+                      <ArrowLeft className="size-3" /> Back to Sources List
+                    </Button>
+                    <span className="text-[10px] font-mono text-muted-foreground">
+                      {leftTab === "pressnote" ? "Official Press Release PDF View" : "Raw Evidence Document View"}
+                    </span>
+                  </div>
                   <PdfInspector
                     documentTitle={doc.title}
-                    fileUrl={activeSourceUrl}
+                    fileUrl={leftTab === "pressnote" ? undefined : activeSourceUrl}
                     activeLocator={activeLocator}
-                    className="h-[460px]"
+                    initialMode={leftTab === "pressnote" ? "pressnote" : "evidence"}
+                    pressNoteData={{
+                      headline1,
+                      headline2,
+                      headline3,
+                      summary,
+                      detail,
+                      secondaryHeadline,
+                      secondarySummary,
+                      department: domainProfile.entityName,
+                      status,
+                      revisionsCount: doc.revisions.length,
+                      spans: extractedSpans,
+                      documentId: doc.id,
+                    }}
+                    className="h-[520px]"
                   />
                 </div>
               ) : (
@@ -588,10 +683,11 @@ export function ReviewEditor({
                               variant="ghost"
                               size="xs"
                               onClick={() => {
+                                setSelectedSourceId(s.id);
                                 setLeftTab("inspector");
                                 setActiveLocator(null);
                               }}
-                              className="text-[10px] h-6"
+                              className="text-[10px] h-6 cursor-pointer"
                             >
                               Inspect →
                             </Button>

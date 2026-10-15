@@ -36,8 +36,17 @@ export function DirectUploadDropzone({
   };
 
   const handleFile = (file: File) => {
-    setSelectedFile(file);
     const kind = detectKind(file);
+    const MAX_PDF_BYTES = 50 * 1024 * 1024; // 50MB
+    if (kind === "pdf" && file.size > MAX_PDF_BYTES) {
+      setSelectedFile(null);
+      setStatus("error");
+      setErrorMessage(
+        `PDF size (${(file.size / (1024 * 1024)).toFixed(1)} MB) exceeds maximum allowed limit of 50 MB. Upload rejected.`,
+      );
+      return;
+    }
+    setSelectedFile(file);
     setFileKind(kind);
     setStatus("idle");
     setErrorMessage(null);
