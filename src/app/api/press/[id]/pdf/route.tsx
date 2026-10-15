@@ -70,38 +70,49 @@ export async function GET(_req: Request, { params }: RouteParams) {
     }
   };
 
-  for (const fig of note.figures) {
+  const docId = doc.id;
+
+  async function resolveImageDataUrl(imageUrl: string): Promise<string | null> {
     try {
-      if (fig.imageUrl.startsWith("/api/storage/file?key=")) {
-        const key = decodeURIComponent(fig.imageUrl.split("key=")[1] ?? "");
-        const prefix = `tenants/${orgId}/docs/${doc.id}/`;
-        if (!key.startsWith(prefix) || !s3) continue;
+      if (imageUrl.startsWith("/api/storage/file?key=")) {
+        const key = decodeURIComponent(imageUrl.split("key=")[1] ?? "");
+        const prefix = `tenants/${orgId}/docs/${docId}/`;
+        if (!key.startsWith(prefix) || !s3) return null;
         const head = await withTimeout((signal) =>
           s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key }), { abortSignal: signal }),
         );
         const size = head.ContentLength ?? 0;
-        if (size <= 0 || size > MAX_FIGURE_BYTES) continue;
+        if (size <= 0 || size > MAX_FIGURE_BYTES) return null;
         const out = await withTimeout((signal) =>
           s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }), { abortSignal: signal }),
         );
-        if (!out.Body) continue;
+        if (!out.Body) return null;
         const bytes = await out.Body.transformToByteArray();
-        if (bytes.length === 0 || bytes.length > MAX_FIGURE_BYTES) continue;
+        if (bytes.length === 0 || bytes.length > MAX_FIGURE_BYTES) return null;
         const mime = out.ContentType ?? "image/png";
-        figureData[fig.id] = `data:${mime};base64,${Buffer.from(bytes).toString("base64")}`;
-      } else if (fig.imageUrl.startsWith("https://")) {
-        const res = await withTimeout((signal) => fetch(fig.imageUrl, { signal }));
-        if (!res.ok) continue;
-        const mime = res.headers.get("content-type")?.split(";")[0]?.trim() ?? "";
-        if (!mime.startsWith("image/")) continue;
-        const buf = Buffer.from(await res.arrayBuffer());
-        if (buf.length === 0 || buf.length > MAX_FIGURE_BYTES) continue;
-        figureData[fig.id] = `data:${mime};base64,${buf.toString("base64")}`;
+        return `data:${mime};base64,${Buffer.from(bytes).toString("base64")}`;
       }
+      if (imageUrl.startsWith("https://")) {
+        const res = await withTimeout((signal) => fetch(imageUrl, { signal }));
+        if (!res.ok) return null;
+        const mime = res.headers.get("content-type")?.split(";")[0]?.trim() ?? "";
+        if (!mime.startsWith("image/")) return null;
+        const buf = Buffer.from(await res.arrayBuffer());
+        if (buf.length === 0 || buf.length > MAX_FIGURE_BYTES) return null;
+        return `data:${mime};base64,${buf.toString("base64")}`;
+      }
+      return null;
     } catch {
       // Caption-only fallback is rendered by the document; never fail the PDF.
+      return null;
     }
   }
+
+  for (const fig of note.figures) {
+    const dataUrl = await resolveImageDataUrl(fig.imageUrl);
+    if (dataUrl) figureData[fig.id] = dataUrl;
+  }
+  const signatureData = note.signature ? await resolveImageDataUrl(note.signature.imageUrl) : null;
 
   try {
     const [{ renderToBuffer }, { PibPdfDocument }] = await Promise.all([
@@ -109,7 +120,7 @@ export async function GET(_req: Request, { params }: RouteParams) {
       import("@/lib/press-note/pdf-document"),
     ]);
     const { createElement } = await import("react");
-    const element = createElement(PibPdfDocument, { note, figureData }) as unknown as Parameters<
+    const element = createElement(PibPdfDocument, { note, figureData, signatureData }) as unknown as Parameters<
       typeof renderToBuffer
     >[0];
     const pdf = await renderToBuffer(element);

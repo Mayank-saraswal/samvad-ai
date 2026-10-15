@@ -27,6 +27,17 @@ export interface PibFigure {
   readonly caption: string;
   readonly imageUrl: string;
   readonly alt: string | null;
+  readonly widthPct?: number;
+  readonly align?: "left" | "center" | "right";
+}
+
+export type PibFigureInput = PibFigure;
+
+export interface PibSignature {
+  readonly imageUrl: string;
+  readonly name: string;
+  readonly designation: string | null;
+  readonly dateText: string | null;
 }
 
 export interface PibTable {
@@ -55,6 +66,8 @@ export interface PibPressNoteInput {
   readonly figures?: readonly PibFigure[];
   /** User-inserted data tables. Rendered after figures, before the seal page. */
   readonly tables?: readonly PibTable[];
+  /** Authorizing officer signature for the seal page. Optional. */
+  readonly signature?: PibSignature | null;
   readonly endnote?: string;
   readonly pageNumber?: number;
   readonly releaseDateEn: string;
@@ -75,6 +88,7 @@ export interface PibPressNote {
   readonly evidenceNotes: readonly string[];
   readonly figures: readonly PibFigure[];
   readonly tables: readonly PibTable[];
+  readonly signature: PibSignature | null;
   readonly endnote: string | null;
   readonly pageNumber: number;
   readonly releaseDateEn: string;
@@ -269,6 +283,13 @@ export function buildPibPressNote(
     }
   }
 
+  let signature: PibSignature | null = null;
+  if (input.signature !== undefined && input.signature !== null) {
+    const cleaned = cleanSignature(input.signature);
+    if (cleaned) signature = cleaned;
+    else issues.push({ field: "signature", reason: "signature needs an imageUrl and signer name" });
+  }
+
   if (issues.length > 0 || titleEn === null || ministryEn === null || releaseDateEn === null) {
     return err({ kind: "invalid-input", issues });
   }
@@ -288,11 +309,14 @@ export function buildPibPressNote(
     evidenceNotes,
     figures,
     tables,
+    signature,
     endnote: clean(input.endnote),
     pageNumber,
     releaseDateEn,
   });
 }
+
+const FIGURE_ALIGNMENTS = ["left", "center", "right"] as const;
 
 function cleanFigure(value: unknown): PibFigure | null {
   if (typeof value !== "object" || value === null) return null;
@@ -304,7 +328,35 @@ function cleanFigure(value: unknown): PibFigure | null {
   if (url.length > MAX_URL_CHARS) return null;
   if (!url.startsWith("/") && !url.startsWith("https://")) return null;
   const alt = typeof rec["alt"] === "string" && rec["alt"].trim().length > 0 ? (rec["alt"] as string).trim() : null;
-  return { id: (rec["id"] as string).trim(), caption: (rec["caption"] as string).trim(), imageUrl: url, alt };
+  const widthPct =
+    typeof rec["widthPct"] === "number" && Number.isFinite(rec["widthPct"])
+      ? Math.min(100, Math.max(25, Math.round(rec["widthPct"])))
+      : 100;
+  const align =
+    typeof rec["align"] === "string" && (FIGURE_ALIGNMENTS as readonly string[]).includes(rec["align"])
+      ? (rec["align"] as PibFigure["align"])
+      : "center";
+  return { id: (rec["id"] as string).trim(), caption: (rec["caption"] as string).trim(), imageUrl: url, alt, widthPct, align };
+}
+
+function cleanSignature(value: unknown): PibSignature | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "object") return null;
+  const rec = value as Record<string, unknown>;
+  if (typeof rec["imageUrl"] !== "string" || rec["imageUrl"].trim().length === 0) return null;
+  if (typeof rec["name"] !== "string" || rec["name"].trim().length === 0) return null;
+  const url = (rec["imageUrl"] as string).trim();
+  if (url.length > MAX_URL_CHARS) return null;
+  if (!url.startsWith("/") && !url.startsWith("https://")) return null;
+  const designation =
+    typeof rec["designation"] === "string" && rec["designation"].trim().length > 0
+      ? (rec["designation"] as string).trim().slice(0, 200)
+      : null;
+  const dateText =
+    typeof rec["dateText"] === "string" && rec["dateText"].trim().length > 0
+      ? (rec["dateText"] as string).trim().slice(0, 100)
+      : null;
+  return { imageUrl: url, name: (rec["name"] as string).trim().slice(0, 200), designation, dateText };
 }
 
 function cleanTable(value: unknown): PibTable | null {
@@ -425,8 +477,8 @@ export function renderPibHtml(note: PibPressNote, phrases: PibPhrases): string {
         `<div style="page-break-before:always;">` +
         pageHeader(note, phrases) +
         `<h2 style="font-size:17px;font-weight:bold;margin:20px 0 10px;line-height:1.4;">${escapeHtml(`Figure ${i + 1} — ${fig.caption}`)}</h2>` +
-        `<div style="text-align:center;margin:14px 0;">` +
-        `<img src="${escapeHtml(fig.imageUrl)}" alt="${escapeHtml(fig.alt ?? fig.caption)}" style="max-width:100%;max-height:640px;border:1px solid #111;" />` +
+        `<div style="text-align:${fig.align};margin:14px 0;">` +
+        `<img src="${escapeHtml(fig.imageUrl)}" alt="${escapeHtml(fig.alt ?? fig.caption)}" style="width:${String(fig.widthPct)}%;max-width:100%;border:1px solid #111;" />` +
         `</div>` +
         pageFooter(phrases, note.pageNumber + 1 + note.sections.length + i) +
         `</div>`,
@@ -512,6 +564,19 @@ export function renderPibHtml(note: PibPressNote, phrases: PibPhrases): string {
     pageHeader(note, phrases) +
     `${evidenceBlock}` +
     `${endnote}` +
+    (note.signature !== null
+      ? `<div style="display:flex;justify-content:flex-end;margin-top:28px;">` +
+        `<div style="text-align:center;min-width:220px;">` +
+        `<img src="${escapeHtml(note.signature.imageUrl)}" alt="Authorizing signature" style="height:64px;max-width:240px;" />` +
+        `<div style="border-top:1px solid #111;margin-top:4px;padding-top:6px;font-size:13px;font-weight:bold;">${escapeHtml(note.signature.name)}</div>` +
+        (note.signature.designation !== null
+          ? `<div style="font-size:12px;">${escapeHtml(note.signature.designation)}</div>`
+          : "") +
+        (note.signature.dateText !== null
+          ? `<div style="font-size:12px;">${escapeHtml(note.signature.dateText)}</div>`
+          : "") +
+        `</div></div>`
+      : "") +
     `<div style="margin-top:28px;border:1px solid #111;padding:16px;text-align:center;">` +
     `<div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;font-weight:bold;">Digitally verified release</div>` +
     `<div style="font-size:12px;margin-top:6px;">${escapeHtml(note.ministryEn)} — ${escapeHtml(note.releaseDateEn)}</div>` +

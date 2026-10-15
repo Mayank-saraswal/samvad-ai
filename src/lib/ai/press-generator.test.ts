@@ -74,4 +74,56 @@ describe("Press Note Generator Module", () => {
       expect(result.value.spans[0]?.locator).toBe("LOC-A1");
     }
   });
+
+  test("caps verbose model output to short industry-grade lengths", async () => {
+    const longText = Array.from({ length: 200 }, (_, i) => `word${i}`).join(" ");
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                headline1: `${longText} extra headline words beyond the limit here`,
+                headline2: "Second headline",
+                headline3: "Third headline",
+                summary: longText,
+                detail: longText,
+                secondaryHeadline: "Secondary",
+                secondarySummary: "Secondary summary",
+                keyFindings: [longText, longText, longText, longText, longText, longText],
+                sections: [1, 2, 3, 4, 5].map((n) => ({
+                  heading: `Section ${n}`,
+                  paragraphs: [longText, longText, longText, longText],
+                })),
+                evidenceAnalysis: [longText, longText, longText],
+              }),
+            },
+          },
+        ],
+      }),
+    });
+
+    const generator = createGptPressNoteGenerator({ apiKey: "test-key", fetchFn: mockFetch });
+    const result = await generator.generate({
+      documentId: "doc-9",
+      tenantId: "tenant-9",
+      documentTitle: "Brevity Case",
+      evidenceSnippets: [{ sourceId: "src-9", kind: "pdf", text: "FIR notes a single verified recovery of two phones." }],
+    });
+
+    expect(isOk(result)).toBe(true);
+    if (isOk(result)) {
+      const count = (s: string) => s.split(/\s+/).filter(Boolean).length;
+      expect(count(result.value.headline1)).toBeLessThanOrEqual(15);
+      expect(count(result.value.summary)).toBeLessThanOrEqual(60);
+      expect(count(result.value.detail)).toBeLessThanOrEqual(220);
+      expect(result.value.keyFindings.length).toBeLessThanOrEqual(4);
+      expect(result.value.sections.length).toBeLessThanOrEqual(3);
+      for (const section of result.value.sections) {
+        expect(section.paragraphs.length).toBeLessThanOrEqual(2);
+      }
+      expect(result.value.evidenceAnalysis.length).toBeLessThanOrEqual(2);
+    }
+  });
 });

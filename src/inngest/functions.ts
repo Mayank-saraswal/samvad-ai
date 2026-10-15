@@ -248,6 +248,10 @@ export const uploadComplete = inngest.createFunction(
           ...fresh,
           figures: Array.isArray(prevPib?.["figures"]) ? (prevPib?.["figures"] as unknown[]) : undefined,
           tables: Array.isArray(prevPib?.["tables"]) ? (prevPib?.["tables"] as unknown[]) : undefined,
+          signature:
+            prevPib?.["signature"] !== null && typeof prevPib?.["signature"] === "object"
+              ? prevPib?.["signature"]
+              : undefined,
         };
 
         await store.addRevision({
@@ -509,6 +513,10 @@ export const uploadComplete = inngest.createFunction(
           ...fresh,
           figures: Array.isArray(prevPib?.["figures"]) ? (prevPib?.["figures"] as unknown[]) : undefined,
           tables: Array.isArray(prevPib?.["tables"]) ? (prevPib?.["tables"] as unknown[]) : undefined,
+          signature:
+            prevPib?.["signature"] !== null && typeof prevPib?.["signature"] === "object"
+              ? prevPib?.["signature"]
+              : undefined,
         };
 
         const revision = await store.addRevision({

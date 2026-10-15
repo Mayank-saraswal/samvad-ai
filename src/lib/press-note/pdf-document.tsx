@@ -46,6 +46,7 @@ try {
 interface PibPdfDocumentProps {
   readonly note: PibPressNote;
   readonly figureData: Readonly<Record<string, string>>;
+  readonly signatureData?: string | null;
   readonly governmentLine?: string;
   readonly pressNoteTitle?: string;
   readonly pageWord?: string;
@@ -121,6 +122,7 @@ function BodyPara({ children }: { children: string }): React.JSX.Element {
 export function PibPdfDocument({
   note,
   figureData,
+  signatureData = null,
   governmentLine = "Government of India",
   pressNoteTitle = "PRESS NOTE",
   pageWord = "Page",
@@ -147,6 +149,7 @@ export function PibPdfDocument({
   const figurePages = note.figures.map((fig, i) => {
     const pageNumber = folio + i;
     const dataUrl = figureData[fig.id];
+    const alignSelf = fig.align === "left" ? "flex-start" : fig.align === "right" ? "flex-end" : "center";
     return (
       <Page key={`figure-${fig.id}`} {...page} wrap={false}>
         <RunningHeader note={note} governmentLine={governmentLine} releaseDateEn={note.releaseDateEn} />
@@ -154,7 +157,9 @@ export function PibPdfDocument({
           Figure {i + 1} — {fig.caption}
         </Text>
         {dataUrl ? (
-          <Image src={dataUrl} style={{ maxWidth: "100%", objectFit: "contain" }} />
+          <View style={{ alignItems: alignSelf }}>
+            <Image src={dataUrl} style={{ width: `${fig.widthPct}%` }} />
+          </View>
         ) : (
           <Text style={{ fontFamily: FONT_FAMILY, fontStyle: ITALIC_STYLE, fontSize: 10, color: "#555555" }}>
             [Figure unavailable in this export]
@@ -313,6 +318,30 @@ export function PibPdfDocument({
         )}
         {note.endnote !== null && (
           <Text style={{ fontSize: 10, color: "#333333", marginTop: 12 }}>{note.endnote}</Text>
+        )}
+        {note.signature !== null && (
+          <View style={{ alignItems: "flex-end", marginTop: 24 }}>
+            <View style={{ alignItems: "center", minWidth: 200 }}>
+              {signatureData ? (
+                <Image src={signatureData} style={{ height: 56, maxWidth: 220 }} />
+              ) : (
+                <Text style={{ fontFamily: FONT_FAMILY, fontStyle: ITALIC_STYLE, fontSize: 10, color: "#555555" }}>
+                  [Signature unavailable in this export]
+                </Text>
+              )}
+              <View style={{ borderTopWidth: 1, borderTopColor: "#111111", marginTop: 4, paddingTop: 6, alignItems: "center" }}>
+                <Text style={{ fontFamily: FONT_FAMILY, fontWeight: BOLD_WEIGHT, fontSize: 11 }}>
+                  {note.signature.name}
+                </Text>
+                {note.signature.designation !== null && (
+                  <Text style={{ fontSize: 10 }}>{note.signature.designation}</Text>
+                )}
+                {note.signature.dateText !== null && (
+                  <Text style={{ fontSize: 10 }}>{note.signature.dateText}</Text>
+                )}
+              </View>
+            </View>
+          </View>
         )}
         <View style={{ borderWidth: 1, borderColor: "#111111", padding: 14, alignItems: "center", marginTop: 24 }}>
           <Text style={{ fontSize: 9, letterSpacing: 1, fontFamily: FONT_FAMILY, fontWeight: BOLD_WEIGHT }}>DIGITALLY VERIFIED RELEASE</Text>

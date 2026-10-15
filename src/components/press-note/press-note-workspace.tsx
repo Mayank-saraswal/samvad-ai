@@ -10,6 +10,7 @@ import {
   FileText,
   ImagePlus,
   LoaderCircle,
+  PenLine,
   Pencil,
   Printer,
   ScanText,
@@ -37,7 +38,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { DirectUploadDropzone } from "@/components/dossier/direct-upload-dropzone";
 import { PibPressNote } from "@/components/press-note/pib-press-note";
-import type { PibFigure, PibPressNoteInput, PibTable } from "@/lib/press-note/pib";
+import type { PibFigure, PibPressNoteInput, PibSignature, PibTable } from "@/lib/press-note/pib";
 import { approveDocumentAction, saveRevisionAction, uploadFigureAction } from "@/app/actions";
 
 type StageStatus = "pending" | "indexing" | "ready" | "skipped" | "failed";
@@ -110,7 +111,7 @@ function FigureManager({
       fd.set("file", file);
       const res = await uploadFigureAction(fd);
       if (!res.success || !res.data) throw new Error(res.error ?? "Figure upload failed");
-      onChange([...figures, { id: res.data.id, caption: res.data.caption, imageUrl: res.data.imageUrl, alt: null }]);
+      onChange([...figures, { id: res.data.id, caption: res.data.caption, imageUrl: res.data.imageUrl, alt: null, widthPct: 100, align: "center" as const }]);
       setCaption("");
       if (fileRef.current) fileRef.current.value = "";
     } catch (e) {
@@ -150,25 +151,64 @@ function FigureManager({
       </div>
       {error && <p className="text-xs text-destructive" role="alert">{error}</p>}
       {figures.map((fig, i) => (
-        <div key={fig.id} className="flex items-center gap-3 rounded-lg border bg-card p-2">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={fig.imageUrl} alt={fig.caption} className="size-14 shrink-0 rounded object-cover" />
-          <div className="min-w-0 flex-1">
-            <p className="font-mono text-[10px] text-muted-foreground">Figure {i + 1}</p>
-            <Input
-              value={fig.caption}
-              onChange={(e) => {
-                const next = [...figures];
-                next[i] = { ...fig, caption: e.target.value };
-                onChange(next);
-              }}
-              aria-label={`Figure ${i + 1} caption`}
-              className="h-8 text-xs"
-            />
+        <div key={fig.id} className="space-y-2 rounded-lg border bg-card p-2">
+          <div className="flex items-center gap-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={fig.imageUrl} alt={fig.caption} className="size-14 shrink-0 rounded object-cover" />
+            <div className="min-w-0 flex-1">
+              <p className="font-mono text-[10px] text-muted-foreground">Figure {i + 1}</p>
+              <Input
+                value={fig.caption}
+                onChange={(e) => {
+                  const next = [...figures];
+                  next[i] = { ...fig, caption: e.target.value };
+                  onChange(next);
+                }}
+                aria-label={`Figure ${i + 1} caption`}
+                className="h-8 text-xs"
+              />
+            </div>
+            <Button variant="ghost" size="icon-sm" aria-label={`Remove figure ${i + 1}`} onClick={() => onChange(figures.filter((f) => f.id !== fig.id))}>
+              <Trash2 className="size-3.5" />
+            </Button>
           </div>
-          <Button variant="ghost" size="icon-sm" aria-label={`Remove figure ${i + 1}`} onClick={() => onChange(figures.filter((f) => f.id !== fig.id))}>
-            <Trash2 className="size-3.5" />
-          </Button>
+          <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+            <label className="flex items-center gap-1.5">
+              Width
+              <select
+                value={fig.widthPct}
+                onChange={(e) => {
+                  const next = [...figures];
+                  next[i] = { ...fig, widthPct: Number(e.target.value) };
+                  onChange(next);
+                }}
+                aria-label={`Figure ${i + 1} width`}
+                className="rounded-md border bg-background px-1.5 py-1 text-[11px]"
+              >
+                {[25, 50, 75, 100].map((w) => (
+                  <option key={w} value={w}>{w}%</option>
+                ))}
+              </select>
+            </label>
+            <div className="flex items-center gap-1" role="radiogroup" aria-label={`Figure ${i + 1} position`}>
+              {(["left", "center", "right"] as const).map((pos) => (
+                <button
+                  key={pos}
+                  type="button"
+                  role="radio"
+                  aria-checked={fig.align === pos}
+                  onClick={() => {
+                    const next = [...figures];
+                    next[i] = { ...fig, align: pos };
+                    onChange(next);
+                  }}
+                  className={`rounded-md border px-2 py-1 text-[11px] capitalize ${fig.align === pos ? "bg-muted font-semibold" : "hover:bg-muted/60"}`}
+                >
+                  {pos}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       ))}
     </div>
@@ -326,6 +366,103 @@ function TableManager({
 }
 
 /**
+ * SignatureManager — attach the authorizing officer's signature to the seal
+ * page. Upload a signature image, add name + designation; rendered above the
+ * verification seal in both preview and exported PDF.
+ */
+function SignatureManager({
+  documentId,
+  tenantId,
+  signature,
+  onChange,
+}: {
+  documentId: string;
+  tenantId: string;
+  signature: PibSignature | null;
+  onChange: (next: PibSignature | null) => void;
+}): React.JSX.Element {
+  const [name, setName] = React.useState("");
+  const [designation, setDesignation] = React.useState("");
+  const [uploading, setUploading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const fileRef = React.useRef<HTMLInputElement | null>(null);
+
+  async function handleFile(file: File) {
+    if (!name.trim()) {
+      setError("Write the signer name first.");
+      return;
+    }
+    setUploading(true);
+    setError(null);
+    try {
+      const fd = new FormData();
+      fd.set("tenantId", tenantId);
+      fd.set("documentId", documentId);
+      fd.set("caption", name.trim());
+      fd.set("file", file);
+      const res = await uploadFigureAction(fd);
+      if (!res.success || !res.data) throw new Error(res.error ?? "Signature upload failed");
+      onChange({
+        imageUrl: res.data.imageUrl,
+        name: name.trim(),
+        designation: designation.trim() ? designation.trim() : null,
+        dateText: null,
+      });
+      setName("");
+      setDesignation("");
+      if (fileRef.current) fileRef.current.value = "";
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Signature upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3 rounded-xl border p-3.5">
+      <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+        Authorizing signature
+      </p>
+      {signature ? (
+        <div className="flex items-center gap-3 rounded-lg border bg-card p-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={signature.imageUrl} alt="Signature" className="h-12 w-auto shrink-0 rounded border bg-white px-2" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-semibold">{signature.name}</p>
+            {signature.designation && <p className="truncate text-[11px] text-muted-foreground">{signature.designation}</p>}
+          </div>
+          <Button variant="ghost" size="icon-sm" aria-label="Remove signature" onClick={() => onChange(null)}>
+            <Trash2 className="size-3.5" />
+          </Button>
+        </div>
+      ) : (
+        <>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Signer name" aria-label="Signer name" />
+            <Input value={designation} onChange={(e) => setDesignation(e.target.value)} placeholder="Designation (optional)" aria-label="Signer designation" />
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".png,.jpg,.jpeg,.webp,.gif"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void handleFile(f);
+            }}
+          />
+          <Button variant="outline" size="sm" disabled={uploading} onClick={() => fileRef.current?.click()} className="gap-1.5">
+            {uploading ? <LoaderCircle className="size-3.5 animate-spin" /> : <PenLine className="size-3.5" />}
+            {uploading ? "Uploading…" : "Attach signature image"}
+          </Button>
+        </>
+      )}
+      {error && <p className="text-xs text-destructive" role="alert">{error}</p>}
+    </div>
+  );
+}
+
+/**
  * Press workspace — the only screen the officer needs. Three states:
  * 1. upload evidence 2. generating (background AI pipelines) 3. final
  * editable press-note PDF. Internal machinery (locators, fact matrix,
@@ -387,13 +524,22 @@ export function PressNoteWorkspace({
     })();
   }, [data, documentId, fetchStatus]);
 
-  // Poll every 2s while generating.
+  const isFailed = Boolean(
+    data &&
+      !data.pib &&
+      (data.pipeline.ocr === "failed" ||
+        data.pipeline.stt === "failed" ||
+        data.pipeline.facts === "failed" ||
+        data.pipeline.draft === "failed")
+  );
+
+  // Poll every 2s while generating, stop if failed (unless user clicks retry/regenerate).
   React.useEffect(() => {
-    if (!data || data.pib) return;
+    if (!data || data.pib || (isFailed && !regenerating)) return;
     if (data.doc.sources.length === 0) return;
     const t = setInterval(() => void fetchStatus(), 2000);
     return () => clearInterval(t);
-  }, [data, fetchStatus]);
+  }, [data, fetchStatus, isFailed, regenerating]);
 
   async function handleRegenerate() {
     setRegenerating(true);
@@ -533,16 +679,22 @@ export function PressNoteWorkspace({
             </Card>
           )}
 
-          {/* STATE 2 — generating */}
+          {/* STATE 2 — generating or failed */}
           {isGenerating && (
             <Card aria-live="polite">
               <CardHeader className="text-center">
-                <div className="mx-auto mb-2 flex size-12 items-center justify-center rounded-full bg-muted">
-                  <LoaderCircle className="size-6 animate-spin" />
+                <div className={`mx-auto mb-2 flex size-12 items-center justify-center rounded-full ${isFailed && !regenerating ? "bg-destructive/10 text-destructive" : "bg-muted"}`}>
+                  {isFailed && !regenerating ? (
+                    <CircleAlert className="size-6 text-destructive" />
+                  ) : (
+                    <LoaderCircle className="size-6 animate-spin" />
+                  )}
                 </div>
-                <CardTitle>Generating your press note…</CardTitle>
+                <CardTitle>{isFailed && !regenerating ? "Pipeline halted" : "Generating your press note…"}</CardTitle>
                 <CardDescription>
-                  Running OCR, speech-to-text, fact checks and drafting. This takes a minute — you can wait here.
+                  {isFailed && !regenerating
+                    ? "A stage encountered an issue. Review the details below and retry or provide updated evidence."
+                    : "Running OCR, speech-to-text, fact checks and drafting. This takes a minute — you can wait here."}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -559,7 +711,7 @@ export function PressNoteWorkspace({
                   aria-valuemin={0}
                   aria-valuemax={100}
                 >
-                  <div className="h-full animate-pulse rounded-full bg-primary transition-all" style={{ width: `${percent}%` }} />
+                  <div className={`h-full rounded-full transition-all ${isFailed && !regenerating ? "bg-destructive" : "animate-pulse bg-primary"}`} style={{ width: `${percent}%` }} />
                 </div>
                 <div className="space-y-2">
                   {STAGES.map(({ key, label, icon: Icon }) => {
@@ -588,6 +740,26 @@ export function PressNoteWorkspace({
                     );
                   })}
                 </div>
+
+                {isFailed && (
+                  <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:justify-center">
+                    <Button
+                      variant="default"
+                      size="sm"
+                      disabled={regenerating}
+                      onClick={handleRegenerate}
+                      className="gap-1.5"
+                    >
+                      {regenerating ? <LoaderCircle className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+                      {regenerating ? "Retrying pipeline…" : "Retry generation"}
+                    </Button>
+                    <Link href="/dossiers">
+                      <Button variant="outline" size="sm" className="w-full sm:w-auto">
+                        Back to Dossiers
+                      </Button>
+                    </Link>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
@@ -662,6 +834,14 @@ export function PressNoteWorkspace({
                     tables={pib.tables ?? []}
                     onChange={(tables) => setForm({ ...pib, tables })}
                   />
+                  {data && (
+                    <SignatureManager
+                      documentId={data.doc.id}
+                      tenantId={data.doc.tenantId}
+                      signature={pib.signature ?? null}
+                      onChange={(signature) => setForm({ ...pib, signature })}
+                    />
+                  )}
                   <div className="flex gap-2">
                     <Button onClick={handleSaveEdits} disabled={saving}>{saving ? "Saving…" : "Save"}</Button>
                     <Button variant="outline" onClick={() => { setEditing(false); setForm(data?.pib ?? null); }}>Cancel</Button>

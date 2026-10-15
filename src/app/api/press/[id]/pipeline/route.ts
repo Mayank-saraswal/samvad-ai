@@ -96,11 +96,54 @@ export async function POST(req: Request, { params }: RouteParams) {
           const { createMistralOcrEngine } = await import("@/lib/ocr/mistral");
           const engine = createMistralOcrEngine({ apiKey: process.env.MISTRAL_API_KEY });
           const ocrRes = await engine.ocr({ documentUrl: url });
-          if (!isOk(ocrRes)) return err("OCR engine rejected the document");
-          if (ocrRes.value.fullMarkdown.trim().length === 0) {
-            return err("OCR returned empty text");
+          if (isOk(ocrRes)) {
+            if (ocrRes.value.fullMarkdown.trim().length === 0) {
+              return err("OCR returned empty text (blank pages or unreadable scan)");
+            }
+            return ok(ocrRes.value.fullMarkdown);
           }
-          return ok(ocrRes.value.fullMarkdown);
+          const mistralWhy =
+            ocrRes.error.kind === "unauthorized"
+              ? ocrRes.error.message
+              : ocrRes.error.kind === "rate-limited"
+                ? ocrRes.error.message
+                : ocrRes.error.kind === "invalid-input"
+                  ? ocrRes.error.issues.join(", ")
+                  : ocrRes.error.message;
+
+          // Fallback A: Gemini OCR for PDFs.
+          if (source.kind === "pdf" && process.env.GEMINI_API_KEY) {
+            try {
+              const { createGeminiOcrEngine } = await import("@/lib/ocr/gemini");
+              const gemini = createGeminiOcrEngine({ apiKey: process.env.GEMINI_API_KEY });
+              const geminiRes = await gemini.ocr({ documentUrl: url });
+              if (isOk(geminiRes) && geminiRes.value.fullMarkdown.trim().length > 0) {
+                return ok(geminiRes.value.fullMarkdown);
+              }
+            } catch {
+              // Fall through to the next fallback.
+            }
+          }
+
+          // Fallback B: GPT vision for images or remaining unextracted text.
+          if (process.env.LITELLM_API_KEY) {
+            try {
+              const { createGptVisionOcrEngine } = await import("@/lib/ocr/gpt-vision");
+              const vision = createGptVisionOcrEngine({
+                apiKey: process.env.LITELLM_API_KEY,
+                baseUrl: process.env.LITELLM_BASE_URL,
+                model: "gpt-5.4",
+              });
+              const visionRes = await vision.ocr({ documentUrl: url });
+              if (isOk(visionRes) && visionRes.value.fullMarkdown.trim().length > 0) {
+                return ok(visionRes.value.fullMarkdown);
+              }
+            } catch {
+              // Fall through to the detailed error below.
+            }
+          }
+
+          return err(`OCR failed: ${mistralWhy}`);
         } catch (e) {
           return err(e instanceof Error ? e.message : "OCR failed");
         }
@@ -223,6 +266,10 @@ export async function POST(req: Request, { params }: RouteParams) {
     ...result.value.pib,
     figures: Array.isArray(latestPib["figures"]) ? latestPib["figures"] : undefined,
     tables: Array.isArray(latestPib["tables"]) ? latestPib["tables"] : undefined,
+    signature:
+      latestPib["signature"] !== null && typeof latestPib["signature"] === "object"
+        ? latestPib["signature"]
+        : undefined,
   };
 
   const nextRevNumber = doc.revisions.length + 1;

@@ -48,6 +48,15 @@ export interface MistralOcrConfig {
   readonly apiKey: string;
   readonly baseUrl?: string;
   readonly model?: string;
+  readonly timeoutMs?: number;
+  readonly maxRetries?: number;
+}
+
+const DEFAULT_OCR_TIMEOUT_MS = 120_000;
+const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 interface RawMistralOcrImage {
@@ -106,6 +115,8 @@ export function createFakeOcrEngine(canned?: Partial<OcrEngineOutput>): Document
 export function createMistralOcrEngine(config: MistralOcrConfig): DocumentOcrEngine {
   const baseUrl = config.baseUrl ?? "https://api.mistral.ai";
   const model = config.model ?? "mistral-ocr-latest";
+  const timeoutMs = config.timeoutMs ?? DEFAULT_OCR_TIMEOUT_MS;
+  const maxRetries = config.maxRetries ?? 1;
 
   return {
     async ocr(input: OcrEngineInput): Promise<Result<OcrEngineOutput, OcrError>> {
@@ -140,39 +151,60 @@ export function createMistralOcrEngine(config: MistralOcrConfig): DocumentOcrEng
         });
       }
 
-      try {
-        const response = await fetch(`${baseUrl}/v1/ocr`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${config.apiKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model,
-            document: documentPayload,
-          }),
-        });
+      let lastError: OcrError = { kind: "transport", message: "OCR request failed" };
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        if (attempt > 0) await sleep(2000 * attempt);
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), timeoutMs);
+          let response: Response;
+          try {
+            response = await fetch(`${baseUrl}/v1/ocr`, {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${config.apiKey}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                model,
+                document: documentPayload,
+              }),
+              signal: controller.signal,
+            });
+          } finally {
+            clearTimeout(timer);
+          }
 
-        if (response.status === 401) {
-          return err({ kind: "unauthorized", message: "Invalid or expired Mistral API key" });
-        }
+          if (response.status === 401) {
+            return err({ kind: "unauthorized", message: "Invalid or expired Mistral API key" });
+          }
 
-        if (response.status === 429) {
-          return err({
-            kind: "rate-limited",
-            message: "Mistral OCR rate limit or quota exceeded",
-          });
-        }
+          if (response.status === 429) {
+            lastError = {
+              kind: "rate-limited",
+              message: "Mistral OCR rate limit or quota exceeded",
+            };
+            continue;
+          }
 
-        if (!response.ok) {
-          const bodyText = await response.text();
-          return err({
-            kind: "transport",
-            message: `Mistral OCR returned status ${response.status}: ${bodyText.slice(0, 200)}`,
-          });
-        }
+          if (RETRYABLE_STATUS.has(response.status)) {
+            const bodyText = await response.text().catch(() => "");
+            lastError = {
+              kind: "transport",
+              message: `Mistral OCR returned status ${response.status}: ${bodyText.slice(0, 200)}`,
+            };
+            continue;
+          }
 
-        const data = (await response.json()) as RawMistralOcrResponse;
+          if (!response.ok) {
+            const bodyText = await response.text();
+            return err({
+              kind: "transport",
+              message: `Mistral OCR returned status ${response.status}: ${bodyText.slice(0, 200)}`,
+            });
+          }
+
+          const data = (await response.json()) as RawMistralOcrResponse;
         const rawPages = Array.isArray(data.pages) ? (data.pages as readonly RawMistralOcrPage[]) : [];
 
         const parsedPages: OcrPageResult[] = [];
@@ -208,16 +240,26 @@ export function createMistralOcrEngine(config: MistralOcrConfig): DocumentOcrEng
         const fullMarkdown = parsedPages.map((p) => p.markdown).join("\n\n");
         const resolvedModel = typeof data.model === "string" ? data.model : model;
 
+        if (fullMarkdown.trim().length === 0) {
+          lastError = {
+            kind: "transport",
+            message: "Mistral OCR returned no readable text (blank pages or unreadable scan)",
+          };
+          continue;
+        }
+
         return ok({
           pages: parsedPages,
           fullMarkdown,
           model: resolvedModel,
           pageCount: parsedPages.length,
         });
-      } catch (e: unknown) {
-        const message = e instanceof Error ? e.message : String(e);
-        return err({ kind: "transport", message });
+        } catch (e: unknown) {
+          const message = e instanceof Error ? e.message : String(e);
+          lastError = { kind: "transport", message };
+        }
       }
+      return err(lastError);
     },
   };
 }

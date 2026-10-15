@@ -190,4 +190,62 @@ describe("visual annexures", () => {
     });
     expect(isErr(built)).toBe(true);
   });
+
+  it("defaults figure sizing and clamps out-of-range widths", () => {
+    const built = buildPibPressNote({
+      ...validInput(),
+      figures: [
+        { id: "fig-1", caption: "Wide", imageUrl: "/api/storage/file?key=abc", alt: null, widthPct: 500, align: "top" as never },
+      ],
+    });
+    expect(isOk(built)).toBe(true);
+    if (isOk(built)) {
+      expect(built.value.figures[0]?.widthPct).toBe(100);
+      expect(built.value.figures[0]?.align).toBe("center");
+      const html = renderPibHtml(built.value, ENGLISH_PIB_PHRASES);
+      expect(html).toContain("width:100%");
+    }
+  });
+
+  it("renders figure alignment and custom widths", () => {
+    const built = buildPibPressNote({
+      ...validInput(),
+      figures: [
+        { id: "fig-1", caption: "Half", imageUrl: "/api/storage/file?key=abc", alt: null, widthPct: 50, align: "right" },
+      ],
+    });
+    expect(isOk(built)).toBe(true);
+    if (isOk(built)) {
+      const html = renderPibHtml(built.value, ENGLISH_PIB_PHRASES);
+      expect(html).toContain("width:50%");
+      expect(html).toContain("text-align:right");
+    }
+  });
+
+  it("accepts a signature and renders it on the seal page", () => {
+    const built = buildPibPressNote({
+      ...validInput(),
+      signature: {
+        imageUrl: "/api/storage/file?key=sig",
+        name: "A. Officer",
+        designation: "Superintendent of Police",
+        dateText: null,
+      },
+    });
+    expect(isOk(built)).toBe(true);
+    if (isOk(built)) {
+      expect(built.value.signature?.name).toBe("A. Officer");
+      const html = renderPibHtml(built.value, ENGLISH_PIB_PHRASES);
+      expect(html).toContain("A. Officer");
+      expect(html).toContain("Superintendent of Police");
+    }
+  });
+
+  it("rejects a signature without a signer name", () => {
+    const built = buildPibPressNote({
+      ...validInput(),
+      signature: { imageUrl: "/api/storage/file?key=sig", name: "   ", designation: null, dateText: null },
+    });
+    expect(isErr(built)).toBe(true);
+  });
 });

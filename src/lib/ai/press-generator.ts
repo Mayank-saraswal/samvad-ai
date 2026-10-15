@@ -79,6 +79,24 @@ const CHUNKS_PER_SOURCE = 6;
 const CHARS_PER_CHUNK = 600;
 const DEFAULT_TIMEOUT_MS = 240_000;
 
+// Industry-grade brevity caps: the note must stay short and to the point.
+// Caps are enforced in code (not just prompted) so output length is
+// deterministic no matter how verbose the model gets.
+const MAX_SUMMARY_WORDS = 60;
+const MAX_DETAIL_WORDS = 220;
+const MAX_FINDINGS = 4;
+const MAX_SECTIONS = 3;
+const MAX_SECTION_PARAS = 2;
+const MAX_PARA_WORDS = 70;
+const MAX_EVIDENCE_NOTES = 2;
+const MAX_EVIDENCE_WORDS = 90;
+
+function capWords(text: string, maxWords: number): string {
+  const words = text.split(/\s+/).filter((w) => w.length > 0);
+  if (words.length <= maxWords) return text.trim();
+  return `${words.slice(0, maxWords).join(" ")}…`;
+}
+
 function splitParagraphs(text: string): string[] {
   return text
     .split(/\n\s*\n/)
@@ -98,6 +116,14 @@ function chunkIntoSections(paragraphs: string[]): PressReportSection[] {
     else out[out.length - 1]?.paragraphs.push(para);
   });
   return out.map((s) => ({ heading: s.heading, paragraphs: [...s.paragraphs] }));
+}
+
+/** Hard brevity caps on sections: at most 3 sections, 2 paragraphs each. */
+function trimSections(sections: readonly PressReportSection[]): PressReportSection[] {
+  return sections.slice(0, MAX_SECTIONS).map((s) => ({
+    heading: s.heading,
+    paragraphs: s.paragraphs.slice(0, MAX_SECTION_PARAS).map((p) => capWords(p, MAX_PARA_WORDS)),
+  }));
 }
 
 function asSections(value: unknown): PressReportSection[] {
@@ -163,26 +189,31 @@ export function createGptPressNoteGenerator(config: PressGeneratorConfig): Press
         .join("\n\n");
 
       const fallbackHeadline = `Official Evidence Record: ${input.documentTitle.slice(0, 60)}`;
+      const fallbackSummary = capWords(
+        spans[0]?.text || "Case record documented with citation groundings.",
+        MAX_SUMMARY_WORDS,
+      );
+      const fallbackDetail = capWords(evidenceContext.slice(0, 2000), MAX_DETAIL_WORDS);
       const fallback = (reason: string): GeneratedPressRelease => ({
-        headline1: fallbackHeadline,
-        headline2: "Electronic evidence secured under Bharatiya Sakshya Adhiniyam §65B",
-        headline3: "Forensic chain of custody maintained in sovereign repository",
-        summary: spans[0]?.text || "Case record documented with cryptographic citation groundings.",
-        detail: evidenceContext,
+        headline1: capWords(fallbackHeadline, 15),
+        headline2: "Electronic evidence secured under evidence protocol",
+        headline3: "Chain of custody maintained in sovereign repository",
+        summary: fallbackSummary,
+        detail: fallbackDetail,
         secondaryHeadline: "Secondary locale headline pending translation pack",
         secondarySummary: "Secondary locale summary pending translation pack",
         spans,
         claims: {
-          event: [{ value: fallbackHeadline, spanIndex: 0 }],
+          event: [{ value: capWords(fallbackHeadline, 15), spanIndex: 0 }],
         },
-        keyFindings: [spans[0]?.text ?? reason].slice(0, 1),
-        sections: [
+        keyFindings: [capWords(spans[0]?.text ?? reason, MAX_PARA_WORDS)].slice(0, 1),
+        sections: trimSections([
           {
             heading: "Evidence record",
-            paragraphs: [evidenceContext.slice(0, 2000)],
+            paragraphs: [fallbackDetail],
           },
-        ],
-        evidenceAnalysis: [reason],
+        ]),
+        evidenceAnalysis: [capWords(reason, MAX_EVIDENCE_WORDS)],
       });
 
       // 2. Call the frontier model in thinking mode when a key is present.
@@ -192,16 +223,16 @@ export function createGptPressNoteGenerator(config: PressGeneratorConfig): Press
           const systemPrompt = [
             "You are an authoritative government legal press officer and forensic analyst.",
             "Think step by step through ALL the evidence locators below before writing: reconcile every source, note agreements and contradictions, and only then synthesize.",
-            "Synthesize a full official Press Report strictly grounded in the cited locators. Never invent names, dates, numbers, or events.",
+            "Synthesize a SHORT, to-the-point official Press Report strictly grounded in the cited locators. Brevity is mandatory.",
             "Strict requirements:",
             '1. "headline1": factual and punchy, strictly under 15 words.',
-            '2. "headline2": secondary headline on recovery, seizure, or key metrics.',
-            '3. "headline3": action/resolution headline on statutes invoked or next steps.',
-            '4. "summary": executive summary, inverted-pyramid style (3-4 sentences).',
-            '5. "detail": formal press body: chronological facts, verified assets, legal citations.',
-            '6. "keyFindings": 4-6 crisp single-sentence findings, most newsworthy first.',
-            '7. "sections": 3-5 sections, each {"heading": string, "paragraphs": [2-4 paragraphs]}: incident & timeline, action taken, recoveries/seizures, legal proceedings & next steps.',
-            '8. "evidenceAnalysis": 2-4 paragraphs analysing source reliability, corroboration across locators, and what could NOT be confirmed.',
+            '2. "headline2": secondary headline on recovery, seizure, or key metrics, under 15 words.',
+            '3. "headline3": action/resolution headline on statutes invoked or next steps, under 15 words.',
+            '4. "summary": executive summary, 1-2 sentences, max 60 words.',
+            '5. "detail": formal press body, max 220 words: chronological facts, verified assets, legal citations.',
+            '6. "keyFindings": 3-4 crisp single-sentence findings, most newsworthy first.',
+            '7. "sections": 2-3 sections (incident & timeline; action taken; legal proceedings & next steps), each with 1-2 paragraphs of max 60 words.',
+            '8. "evidenceAnalysis": 1-2 paragraphs, max 80 words each: source reliability, corroboration, and what could NOT be confirmed.',
             '9. "secondaryHeadline": Hindi translation of headline1. "secondarySummary": Hindi translation of summary.',
             "Return valid JSON matching these exact keys.",
           ].join("\n");
@@ -245,30 +276,31 @@ export function createGptPressNoteGenerator(config: PressGeneratorConfig): Press
                 typeof parsed[k] === "string" && (parsed[k] as string).trim().length > 0
                   ? (parsed[k] as string).trim()
                   : fb;
-              const summary = str("summary", spans[0]?.text || "");
-              const detail = str("detail", evidenceContext);
+              const summary = capWords(str("summary", spans[0]?.text || ""), MAX_SUMMARY_WORDS);
+              const detail = capWords(str("detail", evidenceContext), MAX_DETAIL_WORDS);
               const keyFindings = asStringArray(parsed["keyFindings"]);
               const sections = asSections(parsed["sections"]);
               const evidenceAnalysis = asStringArray(parsed["evidenceAnalysis"]);
               return ok({
-                headline1: str("headline1", input.documentTitle),
-                headline2: str("headline2", "Official Evidence Record & Investigation Debrief"),
-                headline3: str("headline3", "Statutory proceedings initiated under legal protocol"),
+                headline1: capWords(str("headline1", input.documentTitle), 15),
+                headline2: capWords(str("headline2", "Official Evidence Record & Investigation Debrief"), 15),
+                headline3: capWords(str("headline3", "Statutory proceedings initiated under legal protocol"), 15),
                 summary,
                 detail,
                 secondaryHeadline: str("secondaryHeadline", "Secondary locale headline pending translation pack"),
-                secondarySummary: str("secondarySummary", "Secondary locale summary pending translation pack"),
+                secondarySummary: capWords(str("secondarySummary", "Secondary locale summary pending translation pack"), MAX_SUMMARY_WORDS),
                 spans,
                 claims: {
-                  event: [{ value: str("headline1", input.documentTitle), spanIndex: 0 }],
+                  event: [{ value: capWords(str("headline1", input.documentTitle), 15), spanIndex: 0 }],
                 },
                 keyFindings:
-                  keyFindings.length > 0 ? keyFindings.slice(0, 6) : splitParagraphs(summary).slice(0, 4),
-                sections:
-                  sections.length > 0 ? sections : chunkIntoSections(splitParagraphs(detail)),
+                  keyFindings.length > 0
+                    ? keyFindings.map((f) => capWords(f, MAX_PARA_WORDS)).slice(0, MAX_FINDINGS)
+                    : splitParagraphs(summary).slice(0, MAX_FINDINGS),
+                sections: trimSections(sections.length > 0 ? sections : chunkIntoSections(splitParagraphs(detail))),
                 evidenceAnalysis:
                   evidenceAnalysis.length > 0
-                    ? evidenceAnalysis.slice(0, 4)
+                    ? evidenceAnalysis.map((p) => capWords(p, MAX_EVIDENCE_WORDS)).slice(0, MAX_EVIDENCE_NOTES)
                     : ["Source reliability and corroboration analysis pending full evidence review."],
               });
             }
